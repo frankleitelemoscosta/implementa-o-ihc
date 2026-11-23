@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>UX-Agent — app assistivo de reconhecimento de objetos</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #1d2330; }
+  header { background: #1d3557; color: #fff; padding: 12px 20px; }
+  header small { opacity: .8; }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px; }
+  section { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  label { display: block; font-size: 13px; margin: 6px 0 2px; }
+  select, input, button { font: inherit; padding: 6px 8px; }
+  button { background: #1d3557; color: #fff; border: 0; border-radius: 5px; cursor: pointer; margin: 3px 3px 0 0; }
+  button.act { background: #457b9d; }
+  pre { white-space: pre-wrap; background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 12.5px; max-height: 260px; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  td, th { border-bottom: 1px solid #e5e7eb; padding: 4px 6px; text-align: left; vertical-align: top; }
+  .mech { color: #b45309; }
+  .verdict { font-size: 18px; font-weight: 700; padding: 8px; border-radius: 6px; }
+  .success { background: #dcfce7; color: #166534; } .fail { background: #fee2e2; color: #991b1b; }
+  .tag { font-size: 11px; background: #e0e7ff; border-radius: 4px; padding: 1px 5px; }
+  .guide { margin: 16px 16px 0; background: #fff8e1; border-left: 5px solid #f4a261; border-radius: 8px; padding: 12px 16px; font-size: 14px; line-height: 1.45; }
+  .guide h2 { margin-bottom: 6px; } .guide ol { margin: 6px 0 0 18px; padding: 0; }
+  .status { font-size: 14px; padding: 8px 10px; border-radius: 6px; background: #e0f2fe; color: #075985; margin-top: 8px; }
+  .status.idle { background: #f1f5f9; color: #475569; }
+  .hint { font-size: 13px; color: #475569; margin: 4px 0 8px; }
+  .phone { border: 3px solid #1d2330; border-radius: 22px; padding: 12px; background: #111827; color: #f9fafb; margin: 8px 0; }
+  .phone .ttl { font-size: 12px; opacity: .75; margin-bottom: 6px; }
+  .phone .say { font-size: 13px; background: #1f2937; border-radius: 8px; padding: 6px 8px; margin-bottom: 8px; }
+  .phone .ctl { padding: 7px 9px; border-radius: 8px; margin: 4px 0; background: #374151; font-size: 14px; }
+  .phone .ctl.focus { outline: 3px solid #22c55e; background: #14532d; }
+  .mesa { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 6px 0; font-size: 11.5px; text-align: center; }
+  .mesa div { background: #78350f; border-radius: 6px; padding: 6px 2px; min-height: 34px; }
+  .mesa div.aim { outline: 3px solid #22c55e; }
+  .mesa small { display: block; opacity: .8; }
+  .todo { background: #dcfce7; color: #14532d; border-radius: 8px; padding: 8px 10px; font-size: 14px; margin: 6px 0; }
+  details summary { cursor: pointer; font-size: 13px; color: #475569; }
+</style>
+</head>
+<body>
+<header><b>UX-Agent</b> — aplicação instrumentada + agente proxy &nbsp;<small>dados sintéticos · sucesso decidido pelo verificador externo</small></header>
+<div class="guide">
+  <h2>O que é isto?</h2>
+  Esta página simula um <b>aplicativo de celular que reconhece objetos pela câmera</b>, feito para uma pessoa cega
+  (a persona fictícia <b>Marina</b>, que usa o leitor de tela TalkBack). Em vez de imagens, a tela mostra
+  <b>o que o celular falaria em voz alta</b> e o que a pessoa percebe com o próprio corpo.
+  <ol>
+    <li><b>Tarefa C1, “Encontre sua caneca azul”</b>: há uma mesa de cozinha com 4 objetos (caneca branca, garrafa térmica,
+      pote de açúcar e caneca azul). É preciso abrir o app, apontar a câmera para a caneca azul, capturar e
+      <b>confirmar</b> que ela é o objeto certo.</li>
+    <li><b>Tarefa C2, “Descubra qual caixa é a dipirona”</b>: o mesmo fluxo, com caixas de remédio.</li>
+    <li><b>Assistir o agente</b> (à esquerda, em cima): a IA tenta fazer a tarefa sozinha e você acompanha cada passo no log.
+      Com o Ollama, cada passo leva uns 40 s. Com “regras (GOMS)”, termina na hora.</li>
+    <li><b>Operar como pessoa</b> (à esquerda, embaixo): você mesmo faz a tarefa clicando nas ações.</li>
+  </ol>
+  No fim, um <b>verificador externo</b> confere o estado final do app: <b>sucesso</b> quando o objeto confirmado é o pedido.
+</div>
+<main>
+  <div>
+    <section>
+      <h2>Assistir execução do agente</h2>
+      <label>Tarefa (somente calibração)</label>
+      <select id="task"><option>C1</option><option>C2</option></select>
+      <label>Condição</label>
+      <select id="cond"><option value="perfil">perfil (mecanismos ligados)</option><option value="comparador">comparador (neutro, vidente)</option><option value="generico">genérico (ficha no prompt, sem mecanismos)</option></select>
+      <label>Agente</label>
+      <select id="agent"><option value="llm">LLM (Claude)</option><option value="ollama">LLM local (Ollama)</option><option value="rules">regras (GOMS)</option></select>
+      <label>Semente</label><input id="seed" type="number" value="1000">
+      <div><button id="runbtn" onclick="watch()">▶ Executar</button></div>
+      <div id="status" class="status idle">Escolha as opções e clique em Executar.</div>
+    </section>
+    <section style="margin-top:16px">
+      <h2>Operar como pessoa (mesmo app, mesmo log)</h2>
+      <p class="hint">Roteiro da C1: com o foco em <i>Reconhecer objeto</i>, “Tocar duas vezes” abre a câmera → mover o celular
+        até ficar apontado para a caneca azul (ela está na ponta direita da mesa) → <i>Capturar</i> → no resultado, deslizar até
+        “caneca azul” → <i>Confirmar objeto</i>.</p>
+      <button onclick="hstart('C1')">Iniciar C1</button><button onclick="hstart('C2')">Iniciar C2</button>
+      <p id="hinstr"></p>
+      <div id="hphone"></div>
+      <div id="htodo"></div>
+      <div id="hacts"></div>
+      <details><summary>Texto bruto que o app “fala” (o mesmo que o agente recebe)</summary><pre id="hobs"></pre></details>
+      <div id="hverdict"></div>
+    </section>
+  </div>
+  <div>
+    <section>
+      <h2>Tarefa <span id="meta" class="tag"></span></h2>
+      <div id="instr"></div>
+      <div id="verdict" style="margin-top:8px"></div>
+    </section>
+    <section style="margin-top:16px">
+      <h2>Log de eventos (ao vivo)</h2>
+      <p class="hint">Cada linha é um passo: a ação que o agente escolheu (fala u:) e o que o app respondeu (fala d:).
+        Em laranja aparecem os efeitos simulados da deficiência visual, que o agente não vê: mira imprecisa, esquecimento etc.</p>
+      <table><thead><tr><th>#</th><th>evento</th><th>fala u: (agente)</th><th>fala d: (sistema)</th><th>mecanismos (fora do prompt)</th></tr></thead><tbody id="log"></tbody></table>
+    </section>
+    <section style="margin-top:16px">
+      <h2>O que o agente recebeu (o<sub>t</sub> + falas válidas) — passo <select id="pstep" onchange="showPrompt()"></select></h2>
+      <pre id="prompt">Vazio até você clicar em “▶ Executar” em “Assistir execução do agente” (no modo “Operar como pessoa” não há agente: quem decide é você). Durante a execução, este painel mostra, a cada passo, exatamente o texto enviado ao agente e a resposta dele.</pre>
+    </section>
+  </div>
+</main>
+<script>
+let prompts = [];
+const EV = { task_start: 'início', task_end: 'fim', announce: 'anúncio', activate: 'ativou', aim_move: 'moveu a mira', focus_move: 'moveu o foco', capture: 'capturou', confirm: 'confirmou', support: 'ajuda / apoio',
+  shortcut_used: 'usou atalho', give_up: 'desistiu', interrupted: 'interrompido (limite de ações)', rejected_action: 'ação inválida (rejeitada)', tech_failure: 'falha técnica' };
+const VERDICT = { success: '✅ Sucesso: confirmou o objeto certo', wrong_object: '❌ Confirmou o objeto errado', give_up: '⏹ Desistiu da tarefa',
+  interrupted: '⏱ Interrompido: atingiu o limite de ações sem concluir', tech_failure: '⚠ Falha técnica (modelo/servidor)', unknown: '? Sessão incompleta' };
+let timer = null;
+function setStatus(text, idle) { $('status').textContent = text; $('status').className = 'status' + (idle ? ' idle' : ''); }
+const $ = (id) => document.getElementById(id);
+function watch() {
+  $('log').innerHTML = ''; $('verdict').innerHTML = ''; prompts = []; $('prompt').textContent = 'Aguardando o primeiro passo…'; $('pstep').innerHTML = '';
+  const q = new URLSearchParams({ task: $('task').value, condition: $('cond').value, agent: $('agent').value, seed: $('seed').value });
+  const es = new EventSource('/api/agent/run?' + q);
+  const t0 = Date.now(); let steps = 0; $('runbtn').disabled = true;
+  const tick = () => setStatus(`⏳ Rodando… ${steps} passo(s) concluído(s) · ${Math.round((Date.now() - t0) / 1000)} s` +
+    ($('agent').value === 'rules' ? '' : ' · aguardando o modelo escolher a próxima ação'));
+  clearInterval(timer); timer = setInterval(tick, 1000); tick();
+  const done = (msg) => { clearInterval(timer); $('runbtn').disabled = false; setStatus(msg, true); es.close(); };
+  es.addEventListener('task', (m) => { const d = JSON.parse(m.data); $('instr').textContent = '“' + d.instruction + '”'; $('meta').textContent = d.condition + ' · ' + d.agent + ' · semente ' + d.seed; });
+  es.addEventListener('log', (m) => {
+    const e = JSON.parse(m.data); if (e.origin === 'agent') steps++;
+    const mech = (e.mechanisms_applied || []).filter(x => x.mechanism !== 'Hesitation').map(x => x.mechanism + ': ' + x.effect).join('<br>');
+    $('log').insertAdjacentHTML('beforeend', `<tr><td>${e.step}</td><td>${EV[e.event_type] || e.event_type}${e.support ? ' <span class=tag>' + e.support + '</span>' : ''}</td><td>${e.u || e.proposed_action || ''}</td><td>${e.d || (e.event_data && e.event_data.reason) || ''}</td><td class=mech>${mech}</td></tr>`);
+  });
+  es.addEventListener('prompt', (m) => {
+    const p = JSON.parse(m.data);
+    const i = prompts.findIndex(x => x.step === p.step);
+    if (i >= 0) prompts[i] = p; else { prompts.push(p); $('pstep').insertAdjacentHTML('beforeend', `<option value=${prompts.length - 1}>${p.step}</option>`); }
+    $('pstep').value = String(prompts.findIndex(x => x.step === p.step)); showPrompt();
+  });
+  es.addEventListener('prompts', (m) => { prompts = JSON.parse(m.data); $('pstep').innerHTML = prompts.map((p, i) => `<option value=${i}>${p.step}</option>`).join(''); showPrompt(); });
+  es.addEventListener('verdict', (m) => { const v = JSON.parse(m.data); $('verdict').innerHTML = `<div class="verdict ${v.verdict === 'success' ? 'success' : 'fail'}">${VERDICT[v.verdict] || v.verdict}</div><small>Verificador externo · ${v.evidence}</small>`; done(`Terminou em ${steps} passo(s). Resultado acima, em “Tarefa”.`); });
+  es.addEventListener('error', (m) => { if (m.data) $('verdict').innerHTML = '<div class="verdict fail">' + JSON.parse(m.data).message + '</div>'; done('Parou com erro (veja acima).'); });
+}
+function showPrompt() { const p = prompts[$('pstep').value]; if (p) $('prompt').textContent = p.user + '\n\n→ resposta do agente: ' + (p.response == null ? '(pensando…)' : p.response); }
+let hid = null;
+async function hstart(task) {
+  const r = await (await fetch('/api/human/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task }) })).json();
+  hid = r.id; $('hinstr').textContent = '“' + r.instruction + '”'; $('hverdict').innerHTML = ''; hrender(r);
+}
+function hrender(r) {
+  if (r.error) { $('htodo').innerHTML = `<div class="todo" style="background:#fee2e2;color:#991b1b">${r.error}</div>`; return; }
+  $('hobs').textContent = r.observation;
+  const u = r.ui || {};
+  let ph = `<div class="phone"><div class="ttl">📱 ${u.title || ''}</div><div class="say">🔊 “${u.announcement || ''}”</div>`;
+  if (u.controls && u.controls.length) ph += u.controls.map((c, i) => `<div class="ctl ${i === u.focus ? 'focus' : ''}">${i === u.focus ? '▶ ' : ''}${c}${i === u.focus ? ' <small>(em foco)</small>' : ''}</div>`).join('');
+  if (u.table) {
+    const cells = [-2, -1, 0, 1, 2].map(p => {
+      const objs = u.table.objects.filter(o => o.pos === p).map(o => o.label).join(', ');
+      return `<div class="${p === u.table.aim ? 'aim' : ''}">${objs || '—'}${p === u.table.aim ? '<small>📷 câmera aqui</small>' : ''}</div>`;
+    }).join('');
+    ph += `<div class="ttl">Mesa vista de cima (verde = para onde o celular aponta · distância ${u.table.zoom})</div><div class="mesa">${cells}</div>`;
+  }
+  if (u.result && u.result.length) ph += `<div class="ttl">Lista de objetos reconhecidos (${u.result.length}) · verde = item em foco</div>` + u.result.map((c, i) => `<div class="ctl ${i === u.resultFocus ? 'focus' : ''}">${i === u.resultFocus ? '▶ ' : ''}${c}</div>`).join('');
+  $('hphone').innerHTML = ph + '</div>';
+  $('htodo').innerHTML = r.ended ? '' : (u.hint ? `<div class="todo">👉 <b>O que fazer agora:</b> ${u.hint}</div>` : '');
+  $('hacts').innerHTML = r.ended ? '' : r.actions.map(a => `<button class=act onclick="hact('${a.id}')">${a.label}</button>`).join('');
+  if (r.verdict) $('hverdict').innerHTML = `<div class="verdict ${r.verdict === 'success' ? 'success' : 'fail'}">${VERDICT[r.verdict] || r.verdict}</div>`;
+}
+async function hact(action) {
+  hrender(await (await fetch('/api/human/act', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: hid, action }) })).json());
+}
+</script>
+</body>
+</html>

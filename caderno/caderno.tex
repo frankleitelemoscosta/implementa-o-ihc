@@ -1,0 +1,303 @@
+% !TEX program = xelatex
+% ARQUIVO GERADO por "npm run caderno" a partir de design/*.yaml e design/ctt.md — não editar à mão.
+\documentclass[a4paper,10pt]{article}
+\usepackage[margin=1.8cm,landscape]{geometry}
+\usepackage{fontspec}
+\setmonofont{DejaVu Sans Mono}[Scale=0.85]
+\usepackage[brazil]{babel}
+\usepackage{booktabs,longtable,array,tabularx,fancyvrb,xcolor,hyperref}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.misc}
+\hypersetup{colorlinks,linkcolor=blue!50!black,urlcolor=blue!50!black}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\renewcommand{\arraystretch}{1.15}
+\title{Anexo E1 --- Caderno de Especificação de Design\\\large UX-Agent: aplicativo assistivo de reconhecimento de objetos}
+\author{Frank Leite Lemos Costa, João Paulo da Cunha Faria, Alvaro Augusto José Silva\\IHC --- CEFET-MG, Campus Divinópolis}
+\date{Gerado a partir de \texttt{design/} do repositório (E2)}
+\begin{document}
+\maketitle
+\noindent Este caderno é o apêndice do artigo (E4). Todo o conteúdo é \textbf{artefato do analista}: nada daqui é enviado ao agente proxy, e a auditoria \texttt{npm run check-leak} verifica isso nos prompts registrados. Cada seção indica o arquivo-fonte e o módulo que o implementa.
+
+\tableofcontents
+
+\section{Tarefas (herdadas da Modelagem)}
+\begin{tabularx}{\linewidth}{l L{3.2cm} X l}
+\toprule
+Id & Conjunto & Instrução literal (única parte enviada ao agente) & Cena\\
+\midrule
+C1 & calibração & Encontre sua caneca azul. Avise se quiser parar. & \texttt{kitchen\_01}\\
+C2 & calibração & Descubra qual caixa é a dipirona. Avise se quiser parar. & \texttt{meds\_01}\\
+V1 & validação (reservada) & Encontre o controle remoto no sofá. Avise se quiser parar. & \texttt{sofa\_01}\\
+V2 & validação (reservada) & Separe a lata de milho. Avise se quiser parar. & \texttt{cans\_01}\\
+\bottomrule
+\end{tabularx}
+
+\medskip\noindent Os critérios de sucesso ficam em \texttt{design/tasks.yaml} e são lidos \emph{apenas} pelo verificador externo (\texttt{src/verifier/verify.ts}). As cenas de V1 e V2 só carregam com \texttt{--validation} e com o \texttt{config.yaml} congelado.
+
+\section{Atividade 1.1 --- Metamensagem e Tabela de Paridade de Signos}
+\emph{Fonte:} \texttt{design/signs.yaml}. \emph{Implementação:} \texttt{src/observation/translator.ts} (o$_t$) e \texttt{src/app/fsm.ts} (falas d:).
+
+\subsection{Metamensagem para os dois receptores}
+\textbf{Receptor humano (Marina):} "Este é o meu entendimento de quem você é: uma pessoa cega, experiente com o leitor de tela, que quer identificar sozinha um objeto da casa e precisa de segurança suficiente para agir. Por isso, desenhei um aplicativo que fala tudo o que mostra, um item por vez, na ordem fixa dos gestos que você já domina; que diz o quanto tem certeza ('provavelmente', porcentagem) para que você decida quando conferir; e que oferece Repetir, Mais detalhes, Ajuda e o seu próprio tato como caminhos de verificação. A decisão de confirmar é sempre sua."
+
+
+\smallskip\noindent\textbf{Receptor agente proxy:} "Você, agente, recebe exatamente o que essa pessoa perceberia a cada momento — o anúncio falado, o item em foco e as ações que ela pode executar agora — e nada além disso: não verá a imagem da câmera, a lista de objetos fora do quadro, o objetivo interno da tarefa nem como o sucesso será julgado. Suas escolhas se limitam às falas que a interface oferece neste estado."
+
+
+\subsection{Tabela de paridade de signos}
+Classes de signo segundo a Engenharia Semiótica: estático, dinâmico e metalinguístico. A coluna “restrito” declara o que \emph{não} pode aparecer em o$_t$.
+\begin{longtable}{L{3cm} L{2.2cm} L{5cm} L{7cm} L{6cm}}
+\toprule
+Signo & Classe & Na tela (pessoa) & Em o$_t$ (agente) & Restrito / não enviado\\
+\midrule\endhead
+Título da tela & estático & Cabeçalho 'Reconhecer objetos — Câmera' & [Tela] Reconhecer objetos — Câmera & nenhum\\
+\midrule
+Controle em foco (TalkBack) & estático & Retângulo de foco + leitura 'Reconhecer objeto, botão' & [Em foco] Reconhecer objeto, botão. & demais controles não focados (perfil); visíveis em [Na tela] só no comparador\\
+\midrule
+Rótulo acessível das ações & metalinguístico & contentDescription dos botões/gestos & lista '- capturar: Botão Capturar' (falas u: válidas no estado) & ações de outras cenas; ações bloqueadas pelo TrustGate somem (filtro de affordance)\\
+\midrule
+Anúncio do reconhecimento & dinâmico & fala 'N objetos reconhecidos: caneca azul, 90 por cento; \ldots{}' & [Último anúncio] \ldots{} (AudioBuffer: só os últimos k itens; '\ldots{}' marca o esquecido) & ids internos (mug\_blue), confiança não anunciada, objetos fora do quadro\\
+\midrule
+Item da lista de resultado & dinâmico & 'Item 2 de 4: caneca azul, 90 por cento' & [Em foco] Item i de n: \ldots{} (SerialChannel); lista completa só no comparador/genérico & itens não focados (perfil)\\
+\midrule
+Indicador de incerteza & dinâmico & 'provavelmente' quando c < 0,75 + porcentagem & idem, textual & limiar $\theta$ da persona (parâmetro do TrustGate)\\
+\midrule
+Posição da câmera & dinâmico & propriocepção (onde o braço aponta); vidente: pré-visualização & [Sua mira, pelo movimento do braço] celular apontado à direita, distância normal & quadro real após AimNoise; pré-visualização só no comparador\\
+\midrule
+Detalhes do objeto & dinâmico & leitura do texto do rótulo, cor, forma, posição & [Último anúncio] Detalhes: \ldots{} & nenhum (informação que o app de fato fala)\\
+\midrule
+Retorno do tato & dinâmico (mundo físico) & forma e tamanho sentidos na mão & 'Ao tato: caixa retangular pequena.' & texto impresso (tato não lê)\\
+\midrule
+Tela de ajuda estratificada & metalinguístico & tópicos: enquadramento, resultado, confiança, confirmar & texto do tópico escolhido, só após a fala u: pedir\_ajuda $\rightarrow$ ajuda\_* & ajuda nunca é enviada sem pedido registrado\\
+\midrule
+Histórico de passos & dinâmico & memória da própria pessoa & [Passos anteriores] últimos 4 (janela controlada pelo controlador) & passos além da janela; listas longas passam pelo AudioBuffer\\
+\bottomrule
+\end{longtable}
+\noindent\textbf{Nunca em o$_t$:} HTA, CTT, GOMS/KLM, critério de sucesso, alvo interno, ids de objetos, parâmetros $\theta$, nomes dos mecanismos, cenas/instruções de V1 e V2. \textbf{Auditoria:} npm run check-leak -{}- <dir> varre todos os prompts enviados.
+
+\section{Atividade 1.2 --- Refinamento em CTT e linha de base GOMS/KLM}
+\emph{Fonte:} \texttt{design/ctt.md} e \texttt{design/klm.yaml}. Notação de Paternò (Dix et al., 2004):
+\begin{itemize}\setlength\itemsep{0pt}
+\item \texttt{$\gg$} habilitação (sequência)
+\item \texttt{[]>} habilitação com passagem de informação
+\item \texttt{[]} escolha
+\item \texttt{[>} desativação: a tarefa da direita interrompe e encerra a da esquerda
+\item \texttt{|>} suspensão/retomada: a da direita suspende a da esquerda, que é retomada depois. Aqui é usada para a \textbf{ajuda sob demanda}.
+\item \texttt{*} iteração
+\end{itemize}
+Nos diagramas abaixo, em fonte monoespaçada, $\gg$ aparece como \texttt{>{}>}. Tipos de tarefa: (U) usuário, (I) interação, (S) sistema, (A) abstrata. Cada folha (I) é uma fala u: da MoLIC; cada folha (S), uma fala d:.
+
+\subsection*{C1 — Achar a caneca (calibração)}
+\begin{Verbatim}[fontsize=\footnotesize,frame=single]
+Ter caneca azul confirmada (A)
+├── Iniciar reconhecimento (A)
+│     ( Próximo (I)* >> Ativar (I) )  []  AtalhoCâmera (I)          >>  Abrir câmera (S)
+├── Obter anúncio com a caneca (A)                                   *  até o anúncio citar a caneca
+│     ( Mirar esq/dir (I)* >> [Aproximar | Afastar (I)] >> Tato (I)? ) []> Capturar (I) []> Anunciar (S) >> Ouvir (U)
+│        |> Ajuda (A) = PedirAjuda (I) >> EscolherTópico (I) >> LerAjuda (S) >> Voltar (I)
+├── Achar a caneca no resultado (A)
+│     ( Próximo | Anterior (I) []> AnunciarItem (S) >> Avaliar item (U) )*
+│        |> Repetir (I) []> AnunciarLista (S)
+│        |> MaisDetalhes (I) []> LerDetalhes (S) >> Voltar (I)
+│     [>  NovaCaptura (I)                                             (volta a "Obter anúncio")
+└── Confirmar (A)
+      Decidir (U) >> Confirmar (I) >> AnunciarConfirmação (S)
+Desistir (I) [> (qualquer subtarefa)                                  (desativação global → give_up)
+\end{Verbatim}
+
+\subsection*{C2 — Identificar o medicamento (calibração)}
+\begin{Verbatim}[fontsize=\footnotesize,frame=single]
+Ter dipirona confirmada (A)
+├── Iniciar reconhecimento (A)          = C1
+├── Examinar caixa (A)  *  para cada caixa até achar a dipirona
+│     Tato (I)? >> Capturar (I) []> Anunciar (S) >> Ouvir (U)
+│     >> [ MaisDetalhes (I) []> LerRótulo (S) >> Voltar (I) ]          (se o anúncio for genérico ou "provavelmente")
+│     >> Decidir se é a dipirona (U)
+│     >> ( NovaCaptura (I) >> PegarPróxima (I) )                         (se não for)
+│        |> Ajuda (A)
+└── Confirmar (A)                       = C1
+Desistir (I) [> (qualquer subtarefa)
+\end{Verbatim}
+
+\subsection*{V1 — Localizar o controle remoto (validação, reservada)}
+\begin{Verbatim}[fontsize=\footnotesize,frame=single]
+Ter controle confirmado (A)
+├── Abrir o app (A)       AtalhoApp (I)  []  ( Próximo (I)* >> Ativar (I) )
+├── Iniciar reconhecimento (A)
+├── Varrer o sofá (A)     ( Mirar parte j (I) >> Capturar (I) []> Anunciar (S) >> Ouvir (U) )*   j = 1..3
+├── Achar o controle na lista (A)       = C1.3, com até 5 itens  |> Repetir
+└── Confirmar (A)
+Desistir (I) [> (qualquer subtarefa)
+\end{Verbatim}
+
+\subsection*{V2 — Separar a lata de milho (validação, reservada)}
+\begin{Verbatim}[fontsize=\footnotesize,frame=single]
+Ter lata de milho confirmada (A)
+├── Iniciar reconhecimento (A)
+├── Capturar lata A (A)    Capturar (I) []> Anunciar c<θ (S) >> Ouvir (U)
+├── Resolver incerteza (A)  ( MaisDetalhes (I) [] (Aproximar (I) >> Capturar (I)) [] Tato (I) )*   até c ≥ θ ou r verificações
+├── Comparar com lata B (A)  [opcional]  PegarPróxima (I) >> repetir 2–3
+└── Confirmar (A)
+Desistir (I) [> (qualquer subtarefa)
+\end{Verbatim}
+
+\subsection*{Linha de base GOMS/KLM de especialista}
+Operadores: K = 0,28\,s, M = 1,35\,s, P = 1,10\,s e R = duração da fala d: (palavras $\div$ 3 por segundo). Os valores abaixo são calculados reexecutando o método ideal no próprio FSM (\texttt{klmBaseline} em \texttt{src/analysis/metrics.ts}), e não digitados à mão.
+
+\begin{tabularx}{\linewidth}{l X L{6.5cm} c c}
+\toprule
+Tarefa & Método (especialista, sem erros) & Operadores por ação & Ações & $T_{KLM}$ (s)\\
+\midrule
+C1 & Ativar $\gg$ Mirar direita $\times$2 $\gg$ Capturar $\gg$ [Ouvir: R] $\gg$ Confirmar & \texttt{MKR MPR PR MKR MKR} & 5 & 19{,}11\\
+\midrule
+C2 & Ativar $\gg$ Capturar $\gg$ Mais detalhes $\gg$ Voltar $\gg$ Nova captura $\gg$ Pegar próxima $\gg$ Capturar $\gg$ Mais detalhes $\gg$ Confirmar & \texttt{MKR MKR MKR MKR MKR MPR MKR MKR MKR} & 9 & 52{,}16\\
+\bottomrule
+\end{tabularx}
+
+\smallskip\noindent O tempo KLM é a linha de base \emph{ideal} (especialista, sem erros) e não é atribuído à persona. O tempo simulado do agente (mecanismo Hesitation) é hipótese operacional e só é comparado como razão $T_{sim}/T_{KLM}$. V1 e V2 têm só a contagem de ações da HTA congelada (10 e 7), usada no limite de interrupção.
+
+\clearpage
+\section{Atividade 1.3 --- Modelagem da conversa em MoLIC}
+\emph{Fonte:} \texttt{design/molic.yaml}. \emph{Implementação:} \texttt{src/app/fsm.ts}, testada contra a especificação (toda fala u: oferecida pelo FSM tem de estar declarada na MoLIC). Papel de usuário único: pessoa usuária do app (Marina ou comparador vidente). As falas u: de cada cena são exatamente o \emph{enum} da saída estruturada do LLM naquele estado.
+
+\begin{center}
+\begin{tikzpicture}[>=Stealth, font=\footnotesize,
+  cena/.style={draw, rounded rectangle, align=center, fill=blue!6, inner sep=4pt, text width=3.6cm},
+  abre/.style={circle, fill=black, minimum size=4mm},
+  fecha/.style={circle, draw, double, double distance=1.2pt, fill=black, minimum size=4mm},
+  lbl/.style={font=\scriptsize\ttfamily, fill=white, inner sep=1.5pt, align=center}]
+\node[cena] (launcher) at (0,-4.2) {\textbf{Launcher}\\{\scriptsize Abrir o aplicativo (tela inicial do celular)}\\[1pt]{\tiny proximo, anterior, ativar}};
+\node[cena] (inicio) at (4,0) {\textbf{Início}\\{\scriptsize Escolher o que fazer no app}\\[1pt]{\tiny proximo, anterior}};
+\node[cena] (camera) at (11,0) {\textbf{Câmera}\\{\scriptsize Enquadrar e capturar o objeto}\\[1pt]{\tiny mirar\_esquerda, mirar\_direita, aproximar, afastar, tato, pegar\_proxima}};
+\node[cena] (resultado) at (11,-4.6) {\textbf{Resultado}\\{\scriptsize Ouvir e escolher o objeto reconhecido}\\[1pt]{\tiny proximo, anterior, repetir}};
+\node[cena] (detalhes) at (18.5,-4.6) {\textbf{Detalhes}\\{\scriptsize Verificar o objeto em foco}\\[1pt]{\tiny repetir}};
+\node[cena] (ajuda) at (4,-8) {\textbf{Ajuda}\\{\scriptsize Tirar uma dúvida (ajuda sob demanda, estratificada)}\\[1pt]{\tiny ajuda\_enquadrar, ajuda\_navegar, ajuda\_confianca, ajuda\_confirmar}};
+\node[abre] (abertura) at (0,0) {};
+\node[fecha] (encerramento) at (18.5,0) {};
+\node[font=\scriptsize, above=1pt of encerramento] {Encerramento};
+\draw[->] (abertura) -- node[lbl,above]{d: tela inicial} (inicio);
+\draw[->] (launcher) to[] node[lbl]{ativar, atalho\_app} (inicio);
+\draw[->] (inicio) to[] node[lbl]{ativar, atalho\_camera} (camera);
+\draw[->] (inicio) to[bend right=10] node[lbl]{ativar} (ajuda);
+\draw[->] (camera) to[] node[lbl,left]{capturar} (resultado);
+\draw[->] (camera) to[] node[lbl]{pedir\_ajuda} (ajuda);
+\draw[->] (camera) to[bend right=18] node[lbl]{voltar} (inicio);
+\draw[->] (resultado) to[] node[lbl]{mais\_detalhes} (detalhes);
+\draw[->] (resultado) to[] node[lbl]{confirmar, confirmar:<id>} (encerramento);
+\draw[->] (resultado) to[bend right=30] node[lbl,right]{nova\_captura} (camera);
+\draw[->] (resultado) to[bend left=12] node[lbl]{pedir\_ajuda} (ajuda);
+\draw[->] (detalhes) to[] node[lbl]{confirmar} (encerramento);
+\draw[->] (detalhes) to[bend left=25] node[lbl]{voltar} (resultado);
+\draw[->,dashed] (ajuda.west) -- ++(-0.9,0) node[lbl,left,align=right]{voltar\\(volta à cena de origem)};
+\node[draw, red!60!black, dashed, font=\scriptsize, text width=5cm, align=center] at (16,-8) {\texttt{desistir} em qualquer cena $\rightarrow$ Encerramento\\(desativação global [>, evento \texttt{give\_up})};
+\end{tikzpicture}
+\end{center}
+\noindent Laços (falas que permanecem na cena) aparecem em letra miúda dentro de cada cena. Setas tracejadas: retorno à cena de origem (Ajuda $\rightarrow$ cena anterior).
+
+\subsection*{Falas u: e d: por cena, ligadas aos eventos do log}
+\begin{longtable}{l l L{7.5cm} L{2.6cm} L{3.4cm} L{5.2cm}}
+\toprule
+Cena & Fala u: & Fala d: (preposto do designer) & Vai para & Evento no log & Condição / mecanismo\\
+\midrule\endhead
+Launcher & \texttt{proximo} & foco no próximo app da lista & launcher & \texttt{focus\_move} & \\
+Launcher & \texttt{anterior} & foco no app anterior & launcher & \texttt{focus\_move} & \\
+Launcher & \texttt{ativar} & abre o app em foco & inicio|launcher & \texttt{activate} & \\
+Launcher & \texttt{atalho\_app} & Reconhecer objetos aberto & inicio & \texttt{shortcut\_used} & ExpertShortcuts sorteou disponível\\
+Launcher & \texttt{desistir} & tarefa encerrada pela pessoa & encerramento & \texttt{give\_up} & \\
+Início & \texttt{proximo} & foco no próximo controle (Reconhecer objeto | Ajuda) & inicio & \texttt{focus\_move} & \\
+Início & \texttt{anterior} & foco no controle anterior & inicio & \texttt{focus\_move} & \\
+Início & \texttt{ativar} & Câmera aberta. Aponte para o objeto e toque em Capturar. & camera|ajuda & \texttt{activate} & \\
+Início & \texttt{atalho\_camera} & Câmera aberta (atalho) & camera & \texttt{shortcut\_used} & ExpertShortcuts\\
+Início & \texttt{desistir} & tarefa encerrada & encerramento & \texttt{give\_up} & \\
+Câmera & \texttt{mirar\_esquerda} & Câmera movida para a esquerda & camera & \texttt{aim\_move} & table\\
+Câmera & \texttt{mirar\_direita} & Câmera movida para a direita & camera & \texttt{aim\_move} & table\\
+Câmera & \texttt{aproximar} & Câmera mais perto & camera & \texttt{aim\_move} & \\
+Câmera & \texttt{afastar} & Câmera mais longe & camera & \texttt{aim\_move} & \\
+Câmera & \texttt{tato} & forma e tamanho percebidos ao tato (sem texto) & camera & \texttt{support} (tato) & \\
+Câmera & \texttt{pegar\_proxima} & Você pegou outro objeto & camera & \texttt{aim\_move} & held\\
+Câmera & \texttt{capturar} & anúncio: N objetos reconhecidos; item i de N com confiança & resultado & \texttt{capture} & \\
+Câmera & \texttt{pedir\_ajuda} & Ajuda. Escolha o tipo de dúvida. & ajuda & \texttt{support} (help) & \\
+Câmera & \texttt{voltar} & Tela inicial & inicio & \texttt{activate} & \\
+Câmera & \texttt{desistir} & tarefa encerrada & encerramento & \texttt{give\_up} & \\
+Resultado & \texttt{proximo} & item i+1 de N & resultado & \texttt{focus\_move} & SerialChannel\\
+Resultado & \texttt{anterior} & item i-1 de N & resultado & \texttt{focus\_move} & SerialChannel\\
+Resultado & \texttt{repetir} & anúncio repetido por completo & resultado & \texttt{support} (repeat) & \\
+Resultado & \texttt{mais\_detalhes} & texto do rótulo, cor, forma, posição & detalhes & \texttt{support} (details) & \\
+Resultado & \texttt{confirmar} & Objeto confirmado: <rótulo> & encerramento & \texttt{confirm} & TrustGate libera (c $\geq$ $\theta$ ou r verificações ou sorteio q)\\
+Resultado & \texttt{confirmar:<id>} & Objeto confirmado & encerramento & \texttt{confirm} & sem SerialChannel (lista visível)\\
+Resultado & \texttt{nova\_captura} & Câmera aberta & camera & \texttt{activate} & \\
+Resultado & \texttt{pedir\_ajuda} & Ajuda & ajuda & \texttt{support} (help) & \\
+Resultado & \texttt{desistir} & tarefa encerrada & encerramento & \texttt{give\_up} & \\
+Detalhes & \texttt{repetir} & detalhes repetidos & detalhes & \texttt{support} (repeat) & \\
+Detalhes & \texttt{confirmar} & Objeto confirmado & encerramento & \texttt{confirm} & TrustGate\\
+Detalhes & \texttt{voltar} & Resultado & resultado & \texttt{activate} & \\
+Detalhes & \texttt{desistir} & tarefa encerrada & encerramento & \texttt{give\_up} & \\
+Ajuda & \texttt{ajuda\_enquadrar} & instruções de enquadramento & ajuda & \texttt{support} (help) & \\
+Ajuda & \texttt{ajuda\_navegar} & como percorrer a lista de resultados & ajuda & \texttt{support} (help) & \\
+Ajuda & \texttt{ajuda\_confianca} & o que significa a porcentagem & ajuda & \texttt{support} (help) & \\
+Ajuda & \texttt{ajuda\_confirmar} & como confirmar o objeto & ajuda & \texttt{support} (help) & \\
+Ajuda & \texttt{voltar} & retorna à cena de origem & <cena anterior> & \texttt{activate} & \\
+Ajuda & \texttt{desistir} & tarefa encerrada & encerramento & \texttt{give\_up} & \\
+\bottomrule
+\end{longtable}
+
+\subsection*{Falas de ruptura do preposto}
+\begin{itemize}\setlength\itemsep{0pt}
+\item \texttt{capture\_empty}: d: Nenhum objeto reconhecido. Tente mover a câmera ou afastar.
+\item \texttt{low\_confidence}: d: <rótulo>, provavelmente, <c>\%.
+\item \texttt{gate\_blocked}: (filtro de affordance: Confirmar ausente da lista de falas)
+\item \texttt{attempt\_limit}: (controlador: limite de capturas sem sucesso $\rightarrow$ desistência)
+\end{itemize}
+
+\section{Atividade 1.4 --- Matriz de rupturas, ajuda sob demanda e mapeamento MAC}
+\emph{Fonte:} \texttt{design/errors.yaml} e \texttt{design/help.yaml}. \emph{Implementação das assinaturas:} \texttt{src/analysis/mac.ts}. PP = prevenção passiva; PA = prevenção ativa; AL = prevenção apoiada; RA = recuperação apoiada; CE = captura de erro. Operações conforme a HTA congelada.
+
+\begin{longtable}{L{2.6cm} L{2.8cm} L{3.2cm} L{2.6cm} L{2.8cm} L{2.4cm} L{3cm} L{4.2cm}}
+\toprule
+Operação (HTA) & Erro previsto & PP & PA & AL & RA & CE & Ruptura MAC: assinatura no log\\
+\midrule\endhead
+1.1 Próximo (achar o botão) & lapso: passar do botão & ordem de foco fixa; 'Reconhecer objeto' é o 1º controle e recebe o foco ao abrir & — & rótulo acessível 'Reconhecer objeto, botão' a cada foco & Anterior (gesto oposto) & — & \textit{Cadê?}: $\geq$2 focus\_move na tela inicial\\
+\midrule
+1.2 Ativar & deslize: ativar Ajuda & apenas 2 controles na tela inicial & -{}- & anúncio da tela aberta ('Câmera aberta\ldots{}' / 'Ajuda\ldots{}') & Voltar & -{}- & \textit{Epa!}: voltar imediatamente após activate/shortcut\_used\\
+\midrule
+2.1 Mirar / Aproximar & enquadramento sem alvo (AimNoise) & mira em passos discretos; limite anunciado ('Limite: a câmera já está bem à direita') & -{}- & tópico de ajuda 'como enquadrar' & Nova captura; Afastar amplia o quadro & 'Nenhum objeto reconhecido. Tente mover a câmera ou afastar.' & \textit{Por que não funciona?}: 2 capture seguidos com resultado vazio\\
+\midrule
+2.2 Capturar & captura sem o alvo & -{}- & -{}- & -{}- & Nova captura & anúncio diz exatamente o que foi reconhecido (sem inventar) & --\\
+\midrule
+2.3 Ouvir (NO) & lapso: esquecer itens (AudioBuffer) & anúncio curto, um item por vez na lista & -{}- & Repetir & -{}- & -{}- & \textit{E agora?}: 2 support(repeat) seguidos\\
+\midrule
+2.4 Abrir Ajuda & -{}- & -{}- & -{}- & -{}- & -{}- & -{}- & \textit{Socorro!}: support(help) após $\geq$2 capturas vazias seguidas\\
+\midrule
+3.1 Percorrer resultado & lapso: perder item & 'Item i de n' em cada foco & -{}- & -{}- & -{}- & 'Volta ao início da lista' ao dar a volta & \textit{Onde estou?}: focus\_move com retorno ao início da lista\\
+\midrule
+C2 2.4 / V2 3.1 Mais detalhes & omitir detalhes; detalhes repetidos sem decisão & -{}- & -{}- & confiança baixa anunciada como 'provavelmente' & -{}- & -{}- & \textit{O que é isto?}: 2º support(details) no mesmo objeto\\
+\midrule
+4.1 Confirmar & engano: objeto errado; aceitar com baixa confiança sem verificar & -{}- & TrustGate da persona (affordance: Confirmar some se c < $\theta$ sem r verificações) — mecanismo do perfil, não da interface & 'provavelmente, 55 por cento' & — (confirmação encerra a tarefa; erro capturado pelo verificador externo) & -{}- & \textit{Para mim está bom}: confirm de objeto com c<0,75 ou $\neq$ alvo sem nenhuma verificação prévia\\
+\midrule
+Deslize de gesto (Slip) & -{}- & -{}- & -{}- & -{}- & -{}- & -{}- & \textit{Ué, o que houve?}: gesto com deslize seguido do gesto oposto\\
+\midrule
+Desistência & -{}- & -{}- & -{}- & -{}- & -{}- & -{}- & \textit{Desisto}: evento give\_up (agente ou AttemptLimit)\\
+\bottomrule
+\end{longtable}
+
+\noindent As rupturas são detectadas \textbf{apenas} por assinaturas na sequência de eventos do log. É vedado inferi-las do texto que o LLM produz.
+
+\subsection*{Ajuda sob demanda estratificada por tipo de dúvida}
+\begin{tabularx}{\linewidth}{X L{6cm} L{5cm}}
+\toprule
+Tipo de dúvida & Fala u: que dá acesso & Registro (\texttt{support})\\
+\midrule
+Como faço? (procedimento — enquadrar) & ajuda\_enquadrar & help\\
+Onde estou? (navegação no resultado) & ajuda\_navegar & help\\
+O que isto significa? (interpretação da confiança) & ajuda\_confianca & help\\
+Como termino? (confirmação) & ajuda\_confirmar & help\\
+O que foi dito? (memória) & repetir & repeat\\
+O que é este objeto? (verificação) & mais\_detalhes, tato & details, tactile\\
+\bottomrule
+\end{tabularx}
+\begin{itemize}\setlength\itemsep{0pt}
+\item Nenhum texto de ajuda é anexado a o\_t sem que a fala correspondente tenha sido executada.
+\item Uso de ajuda (U) é contado por tipo, a partir do campo support dos eventos.
+\end{itemize}
+
+\end{document}

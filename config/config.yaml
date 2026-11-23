@@ -1,0 +1,70 @@
+# config.yaml — parâmetros versionados do UX-Agent (θ da matriz de rastreabilidade).
+# O hash SHA-256 deste arquivo é gravado em todo evento (campo config_hash).
+# Nada deste arquivo é enviado ao LLM: os valores são lidos apenas pelo controlador.
+
+persona_id: marina_v1
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-5-5          # previsto na Modelagem (main.pdf, Seç. VII)
+  effort: low                       # escolha de uma ação por passo; ver artigo (decisão D9)
+  max_tokens: 2048
+  timeout_ms: 30000                 # > 30 s = tech_failure (protocolo, Seç. VIII)
+  max_format_retries: 2             # respostas fora do formato antes de tech_failure
+  history_window: 4                 # nº de passos anteriores (ação + o que foi ouvido) no contexto
+  # temperature: 0.7 (Modelagem) — NÃO suportado pelo Sonnet 5.5 (400 em valor não padrão).
+  # A variabilidade entre execuções vem das sementes do controlador.
+
+# Agente local sem chave de API (--agent ollama). Requer `ollama serve` e `ollama pull <model>`.
+# Desvio da Modelagem (prevê claude-sonnet-5-5): registrar no artigo se usado no piloto.
+ollama:
+  model: qwen2.5:7b                 # segue instruções melhor que llama3 8B; requer `ollama pull qwen2.5:7b`
+  host: http://localhost:11434      # sobrescrito por OLLAMA_HOST, se definido
+  temperature: 0.7                  # valor previsto na Modelagem (aqui é suportado)
+  num_predict: 256                  # {"raciocinio": "...", "acao": "..."}
+  reasoning_field: true             # campo curto de raciocínio antes da ação (sem ele o qwen 7B repete a 1ª opção)
+  timeout_ms: 120000                # CPU sem GPU: um passo pode levar dezenas de segundos
+  max_format_retries: 2
+
+limits:
+  max_actions: 25                   # interrupção: 25 ações ou 3× a linha base (o menor)
+  baseline_multiplier: 3
+
+# Chaves liga-desliga dos mecanismos por condição (Seç. VI da Modelagem).
+conditions:
+  perfil:
+    persona_sheet: marina
+    observation: screen_reader      # só o que o TalkBack falaria
+    mechanisms: [SerialChannel, AudioBuffer, AimNoise, TrustGate, ExpertShortcuts, TactileCheck, Slip, Hesitation, AttemptLimit]
+  comparador:
+    persona_sheet: vidente           # adulto vidente pareado
+    observation: full_visual        # tela visível + pré-visualização da câmera
+    mechanisms: [Hesitation]
+  generico:
+    persona_sheet: marina           # ficha no prompt, sem mecanismos (controle "encenação")
+    observation: screen_reader_full # lista completa, sem limite serial nem de memória
+    mechanisms: [Hesitation]
+
+# Distribuições amostradas por execução (main.pdf, Tab. III e VIII). Valores provisórios até calibração.
+distributions:
+  buffer_k:        { type: uniform_int, min: 3, max: 5 }          # L2 AudioBuffer
+  p_enq:           { type: beta, a: 3, b: 7 }                     # L3 AimNoise
+  rho:             { type: uniform, min: 0.3, max: 0.7 }          # L3 redução após Aproximar/Tato
+  theta:           { type: uniform, min: 0.6, max: 0.8 }          # L4 TrustGate limiar de confiança
+  r_verif:         { type: uniform_int, min: 1, max: 2 }          # L4 verificações exigidas
+  q_accept:        { type: uniform, min: 0.0, max: 0.2 }          # L4 aceitação sem verificação
+  experience:      { type: categorical, values: { novato: 0.3, intermediario: 0.4, especialista: 0.3 } }
+  p_at:                                                           # L5 ExpertShortcuts por nível
+    novato:        { type: beta, a: 1, b: 9 }
+    intermediario: { type: beta, a: 5, b: 5 }
+    especialista:  { type: beta, a: 9, b: 1 }
+  p_slip:          { type: beta, a: 1, b: 19 }                    # deslize (passar do alvo no gesto)
+  hesitation_sigma: { type: uniform, min: 0.2, max: 0.6 }         # dispersão log-normal do tempo
+  capture_limit:   { type: uniform_int, min: 5, max: 8 }          # AttemptLimit: capturas sem sucesso antes de desistir
+
+# Operadores KLM (Card, Moran & Newell, 1980), adaptados ao toque — hipótese operacional.
+klm:
+  K: 0.28      # toque/gesto simples (digitador médio)
+  M: 1.35      # preparação mental
+  P: 1.10      # apontar (mirar a câmera)
+  speech_words_per_s: 3.0   # R(t) do anúncio do leitor de tela, velocidade padrão

@@ -1,0 +1,11 @@
+# VALIDAÇÃO V2 — RESERVADA desde 26/10/2026. Não usar em calibração, testes ou ajustes.
+id: cans_01
+set: validation
+mode: held
+start_screen: inicio
+start_held: 0
+start_zoom: normal
+script: { first_capture_conf: 0.50 }   # primeira captura sempre abaixo de θ (roteiro do ambiente)
+objects:
+  - { id: can_peas, label: lata de ervilha, label_near: lata de ervilha, color: verde,   shape: "lata cilíndrica média", text: "Ervilha em conserva 200 g", conf: 0.68, conf_near: 0.86 }
+  - { id: can_corn, label: lata de milho,   label_near: lata de milho,   color: amarela, shape: "lata cilíndrica média", text: "Milho verde em conserva 200 g", conf: 0.68, conf_near: 0.87 }

@@ -1,0 +1,175 @@
+\documentclass[conference]{IEEEtran}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{booktabs,graphicx,amsmath,array,tabularx,url}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\renewcommand{\arraystretch}{1.08}
+
+\begin{document}
+
+\title{Decisões de Design para Logs Auditáveis: Implementação Instrumentada de um Agente Proxy LLM para um Aplicativo Assistivo de Reconhecimento de Objetos}
+
+\author{\IEEEauthorblockN{Frank Leite Lemos Costa, João Paulo da Cunha Faria, Alvaro Augusto José Silva}
+\IEEEauthorblockA{Engenharia de Computação -- CEFET-MG, Campus Divinópolis\\
+Disciplina: Interação Humano-Computador -- UX-Agent, Fase P3}}
+
+\maketitle
+
+\begin{abstract}
+Agentes proxy baseados em LLM costumam encenar perfis por instruções no prompt, recebem informações que o usuário real não teria e declaram o próprio sucesso. Este trabalho descreve a implementação instrumentada do UX-Agent para um aplicativo assistivo de reconhecimento de objetos, operado no lugar de uma persona fictícia cega e usuária de leitor de tela. A interface foi modelada como metacomunicação para dois receptores, com tabela de paridade de signos, tarefas refinadas em CTT, linha de base GOMS/KLM de especialista, diálogo em MoLIC e matriz de prevenção e recuperação de erros. Na implementação, a MoLIC é a máquina de estados que define, a cada passo, o \emph{enum} de falas válidas da saída estruturada do LLM. Nove mecanismos parametrizados com semente atuam fora do prompt sobre a observação, as ações disponíveis e a execução, e um verificador externo decide o sucesso pelo estado final. Um piloto com as tarefas de calibração compara três condições (perfil, comparador neutro e agente genérico) e relata sucesso, erros, ações, uso de ajuda e rupturas de comunicabilidade detectadas apenas por assinaturas no log. Todos os resultados são sintéticos.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Agente proxy, LLM, MoLIC, engenharia semiótica, KLM, deficiência visual, instrumentação.
+\end{IEEEkeywords}
+
+\section{Introdução e pergunta-chave}
+O UX-Agent é um substituto computacional de um participante humano: a cada passo recebe uma descrição textual da tela, escolhe uma das ações permitidas e tem o passo registrado~\cite{enunciado}. Três falhas comprometem esses registros: o perfil é obtido apenas por texto no prompt, o agente recebe informação que a persona não teria (o gabarito, modelos do analista ou a imagem da câmera) e o sucesso é autodeclarado. Este trabalho responde à pergunta-chave: \emph{que decisões de design da interface instrumentada, do sistema de ajuda e do acoplamento agente--sistema permitem gerar registros auditáveis fornecendo ao agente apenas a informação que a persona teria?} A contribuição é uma implementação reprodutível (repositório E2) cujas decisões são rastreáveis até a modelagem herdada e cujos dados de piloto (E3) podem ser reauditados sem consultar o agente.
+
+\section{Modelagem herdada}
+O aplicativo usa a câmera do smartphone para reconhecer objetos e anuncia o resultado por áudio, com nível de confiança~\cite{modelagem,alinhamento}. A persona primária, Marina (34 anos, fictícia), é cega desde os 19 anos, percebe luz e usa TalkBack diariamente, mas é novata no aplicativo. Cinco linhas de rastreabilidade ligam características do perfil a mecanismos: acesso serial (L1)~\cite{tan2024}, memória auditiva (L2), enquadramento sem retorno visual (L3)~\cite{manduchi}, confiança no anúncio (L4) e capacidade compensatória por atalhos e tato (L5). Foram definidas quatro tarefas: C1 (achar a caneca azul entre 4 objetos) e C2 (identificar a dipirona entre 3 caixas iguais ao tato), de calibração; V1 (controle remoto no sofá) e V2 (lata de milho com confiança baixa), reservadas para validação desde 26/10/2026, com HTAs congeladas em 19/11/2026~\cite{annett}. O comparador humano são adultos videntes pareados.
+
+\section{Decisões de design}
+A Tabela~\ref{tab:decisoes} resume as decisões e seu status epistemológico: Evidência (E), Princípio de Design (P) ou Hipótese Operacional (H). Os artefatos do Caderno de Design (Anexo E1) estão versionados em \texttt{design/}.
+
+\begin{table*}[t]
+\caption{Decisões de design, justificativas e status epistemológico (E = evidência; P = princípio de design; H = hipótese operacional).}
+\label{tab:decisoes}
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.4cm} >{\raggedright\arraybackslash}p{4.6cm} X >{\centering\arraybackslash}p{0.7cm}}
+\toprule
+\# & Decisão & Justificativa & Status\\
+\midrule
+D1 & Interface como simulador textual de 5 telas (Início, Câmera, Resultado, Detalhes, Ajuda) e cenas discretas & Estado final verificável sem consultar o agente; mesma aplicação serve a pessoas (web) e ao agente & P\\
+D2 & Metamensagem para dois receptores; o$_t$ contém só o que o leitor de tela falaria (tabela de paridade de signos) & A interface é metacomunicação do designer~\cite{kammersgaard}; a observação do agente deve ter paridade com a tela percebida pela persona & P\\
+D3 & MoLIC como máquina de estados: falas u: = espaço de ações; falas d: = resposta da interface & Diálogo orientado por conversa~\cite{molic}; cada evento do log corresponde a uma fala & P\\
+D4 & Saída estruturada (JSON \emph{schema}) com \emph{enum} das falas u: válidas no estado, imposta na decodificação & Impede ações inexistentes; a resposta do LLM é só a seleção de uma fala & P\\
+D5 & Uma requisição independente por passo; histórico limitado a 4 passos, montado pelo controlador & A memória disponível ao modelo é decidida fora dele; restringir contexto não comprova memória humana & H\\
+D6 & SerialChannel: no Resultado, só o item em foco ($i$ de $n$) & Leitor de tela entrega a interface de forma linear~\cite{tan2024} & E\\
+D7 & AudioBuffer: de anúncios longos retêm-se os últimos $k\sim U\{3,4,5\}$ itens & Fala é transitória e exige memória de trabalho~\cite{dix}; valor de $k$ sem dado do público & H\\
+D8 & AimNoise: cada Capturar desloca o quadro com $p_{enq}\sim\text{Beta}(3,7)$; Aproximar/Tato multiplicam por $\rho\sim U[0{,}3;0{,}7]$ & Pessoas cegas têm dificuldade de enquadrar~\cite{manduchi}; direção documentada, valores provisórios & E/H\\
+D9 & TrustGate como filtro de affordance: Confirmar some se $c<\theta$ e verificações $<r$, salvo aceitação com prob.\ $q$ & Sem verificação visual, depende-se da confiança anunciada~\cite{modelagem}; regra de verificação é modelo, não fato & H\\
+D10 & ExpertShortcuts ($p_{at}$ por nível de experiência sorteado 30/40/30) e TactileCheck (forma/tamanho, sem texto) & Especialistas usam atalhos e o tato como suporte~\cite{tan2024} & E/H\\
+D11 & Slip (gesto passa do alvo, $p_{slip}\sim\text{Beta}(1,19)$), Hesitation ($T=T_{KLM}\times\text{LogNormal}(\sigma)$) e AttemptLimit ($U\{5..8\}$ capturas) & Lapsos e desistências não emergem de um LLM que tende ao comportamento ideal; controladores estocásticos~\cite{laviola}; tempo comportamental é hipótese & H\\
+D12 & Ajuda sob demanda apenas por fala registrada, estratificada em 4 tipos de dúvida + Repetir, Mais detalhes e Tato & Ajuda acessível por ação explícita~\cite{shneiderman}; uso contado por tipo & P\\
+D13 & Rupturas MAC detectadas só por assinaturas de eventos (10 etiquetas) & Vedado inferir rupturas do discurso do LLM~\cite{enunciado,desouza} & P\\
+D14 & Verificador externo em processo separado, lendo só \texttt{task\_end.state\_after} & Sucesso não pode ser autoafirmado & P\\
+D15 & Controlador recebe a tarefa sem o critério; auditoria automática de vazamento nos prompts & Fronteira de informação: HTA, CTT, KLM e gabarito pertencem ao analista~\cite{dix,mackenzie} & P\\
+D16 & V1/V2 bloqueadas no código; liberação exige \texttt{--validation} e hash do config congelado & Separação calibração/validação~\cite{modelagem} & P\\
+D17 & Condições: perfil (mecanismos ligados), comparador neutro (vidente, sem mecanismos, pré-visualização da câmera) e genérico (ficha no prompt, sem mecanismos), com a mesma semente & Isola o efeito dos mecanismos do efeito da ficha textual (controle de ``encenação'') & P\\
+D18 & Modelo local Qwen2.5-7B-Instruct via Ollama~\cite{qwen,ollama}, temperatura 0{,}7, sem \emph{fallback} de modelo & Execução sem chave de API nem custo, reprodutível offline; a temperatura prevista na Modelagem pôde ser mantida. O \emph{backend} Claude (previsto na Modelagem) segue implementado, mas não foi usado no piloto. Trocar de modelo no meio da sessão confundiria o experimento & H\\
+D19 & Campo curto \texttt{raciocinio} antes de \texttt{acao} na saída estruturada & Sem ele, o modelo de 7B repetia a primeira opção do \emph{enum} em testes de calibração (C1); o campo não chega ao controlador nem às métricas, só ao log de prompts & H\\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\subsection{Paridade de signos e metamensagem}
+A metamensagem para o receptor humano é: ``entendo que você é uma pessoa cega, experiente com leitor de tela, que quer identificar sozinha um objeto e precisa de segurança para agir; por isso tudo é falado, um item por vez, com o grau de certeza, e há caminhos de verificação; a decisão é sua''. Para o agente: ``você recebe exatamente o que essa pessoa perceberia e escolhe entre as falas que a interface oferece agora''. A tabela de paridade (\texttt{design/signs.yaml}) mapeia signos estáticos (título, controle em foco), dinâmicos (anúncio, item $i$ de $n$, ``provavelmente'', retorno do tato, propriocepção da mira) e metalinguísticos (rótulos acessíveis das ações, ajuda) para o texto de o$_t$. Para cada signo ela declara o que é \emph{restrito}: ids internos, objetos fora do quadro, quadro real após o ruído de mira e limiar $\theta$.
+
+\subsection{CTT, KLM e MoLIC}
+As HTAs congeladas foram traduzidas para CTT com habilitação ($\gg$), desativação global por Desistir ($[>$) e suspensão para ajuda ($|>$) sobre as subtarefas de captura e de resultado (\texttt{design/ctt.md}). A linha de base KLM de especialista é calculada reexecutando o método ideal no próprio FSM e somando $K=0{,}28$\,s, $M=1{,}35$\,s, $P=1{,}10$\,s e $R$ (palavras da fala d:/3\,s$^{-1}$)~\cite{card}. Para C1 o resultado é \texttt{MKR MPR PR MKR MKR}, com 5 ações e 19{,}1\,s; para C2, 9 ações e 52{,}2\,s. A MoLIC tem seis cenas (\textit{launcher}, Início, Câmera, Resultado, Detalhes, Ajuda), e cada fala u: é ligada a um tipo de evento do log (\texttt{design/molic.yaml}). Um teste automatizado confere que toda ação oferecida pelo FSM está declarada na MoLIC.
+
+\subsection{Matriz de rupturas e ajuda}
+Para cada operação da HTA, \texttt{design/errors.yaml} associa prevenção passiva (ordem de foco fixa, rótulos), prevenção apoiada (``provavelmente'', ajuda de enquadramento), recuperação apoiada (Anterior, Voltar, Nova captura), captura de erro (``Nenhum objeto reconhecido\ldots'', ``Volta ao início da lista'') e uma assinatura MAC. A prevenção ativa sobre Confirmar não é da interface: ela é o TrustGate da persona, decisão deliberada para não alterar o artefato avaliado.
+
+\section{Arquitetura e acoplamento agente--sistema}
+A Fig.~\ref{fig:arq} mostra o ciclo. A cada passo: (i) o FSM expõe as falas u: da cena; (ii) os mecanismos filtram as falas e transformam a observação; (iii) o LLM recebe ficha, instrução, o$_t$ e lista de falas, e responde \texttt{\{"raciocinio": <texto>, "acao": <enum>\}}; (iv) o controlador valida, aplica as perturbações e executa; (v) o registrador grava o evento e o prompt efetivamente enviado; (vi) ao fim, o verificador externo julga o estado. O controlador nunca conhece o alvo nem o critério. Falhas técnicas (tempo de resposta acima de 120\,s no modelo local, servidor indisponível, truncamento, formato inválido após 2 tentativas) geram \texttt{tech\_failure} e não contam como erro de interação.
+
+\begin{figure}[t]
+\centering\footnotesize
+\begin{tikzpicture}[node distance=4mm and 6mm, box/.style={draw,rounded corners,align=center,minimum height=7mm,inner sep=2pt}, >=Stealth]
+\node[box,fill=orange!15] (s) {Amostrador\\(semente, $\theta$)};
+\node[box,fill=orange!15,right=of s] (m) {Mecanismos\\(9, fora do prompt)};
+\node[box,fill=green!12,below=of s] (a) {App / FSM\\MoLIC};
+\node[box,fill=white,right=of a] (o) {Tradutor\\o$_t$};
+\node[box,fill=blue!12,right=of o] (l) {LLM\\(enum de falas u:)};
+\node[box,fill=orange!15,below=of o] (c) {Controlador\\valida/perturba};
+\node[box,fill=gray!20,below=of a] (lg) {Registrador\\JSONL};
+\node[box,fill=gray!20,below=of lg] (v) {Verificador\\externo};
+\draw[->] (s)--(m); \draw[->] (a)--(o); \draw[->] (m)--(o); \draw[->] (o)--(l);
+\draw[->] (l)|-(c); \draw[->] (m)--(c); \draw[->] (c)-|(a); \draw[->] (c)--(lg); \draw[->] (lg)--(v);
+\end{tikzpicture}
+\caption{Arquitetura do UX-Agent. Laranja: controlador (determinístico/pseudoaleatório com semente); azul: única operação do LLM; cinza: instrumentação e avaliação externas.}
+\label{fig:arq}
+\end{figure}
+
+\section{Instrumentação}
+Cada evento é uma linha JSON com sessão, persona, tarefa, condição, semente, hash do \texttt{config.yaml}, versões, instante real, tempo simulado, passo, tipo do evento (\texttt{focus\_move}, \texttt{activate}, \texttt{aim\_move}, \texttt{capture}, \texttt{support}, \texttt{shortcut\_used}, \texttt{confirm}, \texttt{rejected\_action}, \texttt{give\_up}, \texttt{tech\_failure}, \texttt{task\_start/end}), cena MoLIC antes e depois, falas u: e d:, mecanismos aplicados, operadores KLM, latência e estado antes e depois. Um segundo arquivo guarda, por passo, o prompt de sistema, o prompt do passo, o \emph{schema} de saída e a resposta bruta. O dicionário completo acompanha o E3.
+
+As rupturas de comunicabilidade~\cite{desouza} são detectadas por regras sobre a sequência de eventos (\texttt{src/analysis/mac.ts}):
+\begin{itemize}
+\item \emph{Cadê?}: 2 ou mais \texttt{focus\_move} na tela inicial.
+\item \emph{Epa!}: Voltar logo após uma ativação.
+\item \emph{Onde estou?}: o foco retorna ao início da lista.
+\item \emph{E agora?}: 2 Repetir seguidos.
+\item \emph{O que é isto?}: 2º Mais detalhes do mesmo objeto.
+\item \emph{Por que não funciona?}: 2 capturas vazias seguidas.
+\item \emph{Ué, o que houve?}: correção após um deslize.
+\item \emph{Socorro!}: ajuda após capturas vazias.
+\item \emph{Para mim está bom}: confirmar sem verificação um objeto anunciado com ``provavelmente'' ou errado.
+\item \emph{Desisto}: \texttt{give\_up}.
+\end{itemize}
+A auditoria de fronteira (\texttt{npm run check-leak}) varre todos os prompts em busca de 65 termos proibidos: ids, critério, nomes da HTA/CTT/GOMS/KLM, nomes e parâmetros dos mecanismos, conteúdo de V1/V2 e verbos de encenação.
+
+\section{Piloto}
+Foram executadas as tarefas de calibração C1 e C2 nas três condições, com 10 sementes por célula (1000--1009); a mesma semente sorteia os mesmos $\theta$ nas três condições. As métricas seguem o dicionário herdado~\cite{alinhamento}:
+\begin{itemize}
+\item $S$: sucesso pelo verificador externo.
+\item $AI$: aceitação incorreta.
+\item $R_{enq}$: capturas em que o objeto mirado ficou fora do quadro.
+\item $\bar A$: ações, comparadas a $A_{KLM}$.
+\item $\bar U$: uso de ajuda.
+\item $\bar T_{sim}/T_{KLM}$: razão de tempo, apenas como hipótese.
+\end{itemize}
+A Tabela~\ref{tab:piloto} apresenta os resultados por tarefa e condição, e a Tabela~\ref{tab:mac}, as rupturas.
+
+\begin{table}[t]
+\caption{Resultados do piloto (dados SINTÉTICOS; calibração).}
+\label{tab:piloto}
+\centering\scriptsize\setlength{\tabcolsep}{2.6pt}
+\input{tables/pilot_summary.tex}
+\end{table}
+
+\begin{table}[t]
+\caption{Rupturas MAC detectadas por assinatura no log.}
+\label{tab:mac}
+\centering\scriptsize\setlength{\tabcolsep}{2pt}
+\input{tables/pilot_mac.tex}
+\end{table}
+
+% >>> PREENCHER APÓS O PILOTO COM O LLM (números das Tabelas II e III):
+\textbf{[A completar com os resultados do piloto LLM.]} Pontos a discutir: (a) diferença de $S$, $\bar U$ e $R_{enq}$ entre perfil e comparador, na direção prevista ($S$ menor e $U$, $R_{enq}$ maiores no perfil); (b) diferença entre perfil e genérico, que mede quanto do comportamento vem dos mecanismos e não da ficha textual; (c) $\Delta A=\bar A-A_{KLM}$ e a razão de tempo; (d) quais rupturas aparecem e quais operações da HTA elas apontam como pontos de revisão do protocolo; (e) falhas técnicas e propostas rejeitadas.
+
+\section{Ameaças à validade}
+\textbf{Vazamentos residuais.} A propriocepção da mira e o histórico de 4 passos são escolhas de paridade discutíveis. A ficha diz que Marina é cega, o que pode induzir o LLM a ``encenar'' além dos mecanismos; a condição genérica mede esse efeito, mas não o elimina.
+\textbf{Limitações do LLM.} O piloto usou um modelo pequeno (7B, quantizado, em CPU), escolhido por restrição de custo. Ele erra mais que os modelos previstos na Modelagem, e parte das falhas observadas pode refletir a capacidade do modelo e não o efeito dos mecanismos. Há também não determinismo (temperatura 0{,}7 e amostragem) e possível contaminação por fontes públicas~\cite{manduchi}. O campo \texttt{raciocinio} (D19) muda o formato de resposta previsto e pode alterar as escolhas do modelo.
+\textbf{Validade de construto.} Os valores de $k$, $\theta$, $r$, $q$, $p_{slip}$ e $\sigma$ são hipóteses; o tempo simulado não é tempo humano; eventos de foco não são rastreamento ocular~\cite{nielsen}. A interface é um simulador discreto, sem iluminação, ângulo ou fadiga.
+\textbf{Amostra.} São 10 execuções por célula, abaixo das 30 previstas na Modelagem, o que dá intervalos amplos. As execuções repetidas não ampliam a amostra humana.
+\textbf{Validação.} V1 e V2 não foram executadas. O piloto serve para depurar o protocolo, a instrumentação e as métricas, e o agente permanece um \emph{protótipo exploratório não validado}~\cite{modelagem}.
+
+\section{Conclusão}
+As decisões que mais contribuíram para registros auditáveis foram quatro: (1) a MoLIC executável, que define o \emph{enum} de falas válidas e liga cada fala a um evento; (2) a observação com paridade de signos, auditada automaticamente; (3) os mecanismos com semente fora do prompt, cujos parâmetros ficam no log e não no contexto do modelo; e (4) o verificador externo combinado com a detecção de rupturas apenas por assinaturas. Os próximos passos são calibrar os parâmetros com o piloto humano após aprovação ética, congelar o \texttt{config.yaml} e só então executar V1 e V2.
+
+\begin{thebibliography}{99}\footnotesize
+\bibitem{enunciado} A. Pena Lara, ``UX-Agent: desenvolvimento e implementação (Partes I e II),'' enunciado da disciplina de IHC, CEFET-MG, Divinópolis, 2026.
+\bibitem{modelagem} F. L. L. Costa, J. P. C. Faria e A. A. J. Silva, ``Modelagem de um agente proxy baseado em LLM para avaliação de um aplicativo assistivo de reconhecimento de objetos,'' IHC, CEFET-MG, 2026.
+\bibitem{alinhamento} A. A. J. Silva, F. L. L. Costa e J. P. C. Faria, ``Alinhamento rastreável de um agente proxy baseado em LLM para um aplicativo assistivo de reconhecimento de objetos,'' IHC, CEFET-MG, 2026.
+\bibitem{annett} J. Annett and K. D. Duncan, ``Task analysis and training design,'' \emph{Occupational Psychology}, vol. 41, pp. 211--221, 1967.
+\bibitem{molic} S. D. J. Barbosa and M. G. de Paula, ``Designing and evaluating interaction as conversation: a modeling language based on semiotic engineering,'' in \emph{DSV-IS 2003}, LNCS 2844, Springer, 2003, pp. 16--33.
+\bibitem{card} S. K. Card, T. P. Moran, and A. Newell, ``The keystroke-level model for user performance time with interactive systems,'' \emph{Commun. ACM}, vol. 23, no. 7, pp. 396--410, 1980.
+\bibitem{dix} A. Dix, J. Finlay, G. D. Abowd, and R. Beale, \emph{Human-Computer Interaction}, 3rd ed. Harlow: Pearson, 2004.
+\bibitem{kammersgaard} J. Kammersgaard, ``Four different perspectives on human-computer interaction,'' \emph{Int. J. Man-Machine Studies}, vol. 28, no. 4, pp. 343--362, 1988.
+\bibitem{laviola} J. J. LaViola \emph{et al.}, \emph{3D User Interfaces: Theory and Practice}, 2nd ed. Addison-Wesley, 2017.
+\bibitem{mackenzie} I. S. MacKenzie, \emph{Human-Computer Interaction: An Empirical Research Perspective}. Morgan Kaufmann, 2013.
+\bibitem{nielsen} J. Nielsen and K. Pernice, \emph{Eyetracking Web Usability}. New Riders, 2010.
+\bibitem{shneiderman} B. Shneiderman and C. Plaisant, \emph{Designing the User Interface}, 5th ed. Addison-Wesley, 2010.
+\bibitem{desouza} C. S. de Souza and C. F. Leitão, \emph{Semiotic Engineering Methods for Scientific Research in HCI}. Morgan \& Claypool, 2009.
+\bibitem{tan2024} H. L. Tan, T. Aplin, T. McAuliffe, and H. Gullo, ``An exploration of smartphone use by, and support for people with vision impairment: a scoping review,'' \emph{Disabil. Rehabil. Assist. Technol.}, vol. 19, no. 2, pp. 407--432, 2024.
+\bibitem{qwen} Qwen Team, ``Qwen2.5 technical report,'' arXiv:2412.15115, 2024.
+\bibitem{ollama} Ollama, ``Ollama: run large language models locally,'' 2026. [Online]. Available: \url{https://ollama.com}
+\bibitem{manduchi} R. Manduchi and J. M. Coughlan, ``The last meter: blind visual guidance to a target,'' in \emph{Proc. CHI}, 2014, pp. 3113--3122.
+\end{thebibliography}
+
+\end{document}

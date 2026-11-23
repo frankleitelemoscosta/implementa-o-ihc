@@ -1,0 +1,12 @@
+node_modules/
+.env
+runs/
+pilot/E3.zip
+artigo/*.aux
+artigo/*.log
+artigo/*.out
+caderno/*.aux
+caderno/*.log
+caderno/*.toc
+caderno/*.out
+pilot/E3/

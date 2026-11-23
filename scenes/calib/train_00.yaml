@@ -1,0 +1,10 @@
+# Cena de treino (protocolo: 3 min antes das tarefas). Não é usada em tarefa nem em métricas.
+id: train_00
+set: training
+mode: table
+start_screen: inicio
+start_aim: 0
+start_zoom: normal
+objects:
+  - { id: book,   label: livro,        pos: 0, color: verde, shape: "retangular plano", text: "Receitas da vovó", conf: 0.86 }
+  - { id: glass,  label: copo de vidro, pos: 1, color: transparente, shape: "cilíndrico sem alça", text: "", conf: 0.78 }

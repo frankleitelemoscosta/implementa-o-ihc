@@ -1,0 +1,55 @@
+# errors.yaml — Matriz de prevenção e recuperação de erros + assinaturas MAC (Atividade 1.4).
+# PP prevenção passiva · PA prevenção ativa · AL prevenção apoiada · RA recuperação apoiada · CE captura de erro
+# Operações = HTA congelada (main.pdf, Tab. VII, X–XII). Assinaturas implementadas em src/analysis/mac.ts.
+operations:
+  "1.1 Próximo (achar o botão)":
+    erro: "lapso: passar do botão"
+    PP: "ordem de foco fixa; 'Reconhecer objeto' é o 1º controle e recebe o foco ao abrir"
+    PA: "—"
+    AL: "rótulo acessível 'Reconhecer objeto, botão' a cada foco"
+    RA: "Anterior (gesto oposto)"
+    CE: "—"
+    MAC: { tag: "Cadê?", assinatura: "≥2 focus_move na tela inicial" }
+  "1.2 Ativar":
+    erro: "deslize: ativar Ajuda"
+    PP: "apenas 2 controles na tela inicial"
+    AL: "anúncio da tela aberta ('Câmera aberta…' / 'Ajuda…')"
+    RA: "Voltar"
+    MAC: { tag: "Epa!", assinatura: "voltar imediatamente após activate/shortcut_used" }
+  "2.1 Mirar / Aproximar":
+    erro: "enquadramento sem alvo (AimNoise)"
+    PP: "mira em passos discretos; limite anunciado ('Limite: a câmera já está bem à direita')"
+    AL: "tópico de ajuda 'como enquadrar'"
+    RA: "Nova captura; Afastar amplia o quadro"
+    CE: "'Nenhum objeto reconhecido. Tente mover a câmera ou afastar.'"
+    MAC: { tag: "Por que não funciona?", assinatura: "2 capture seguidos com resultado vazio" }
+  "2.2 Capturar":
+    erro: "captura sem o alvo"
+    CE: "anúncio diz exatamente o que foi reconhecido (sem inventar)"
+    RA: "Nova captura"
+  "2.3 Ouvir (NO)":
+    erro: "lapso: esquecer itens (AudioBuffer)"
+    PP: "anúncio curto, um item por vez na lista"
+    AL: "Repetir"
+    MAC: { tag: "E agora?", assinatura: "2 support(repeat) seguidos" }
+  "2.4 Abrir Ajuda":
+    MAC: { tag: "Socorro!", assinatura: "support(help) após ≥2 capturas vazias seguidas" }
+  "3.1 Percorrer resultado":
+    erro: "lapso: perder item"
+    PP: "'Item i de n' em cada foco"
+    CE: "'Volta ao início da lista' ao dar a volta"
+    MAC: { tag: "Onde estou?", assinatura: "focus_move com retorno ao início da lista" }
+  "C2 2.4 / V2 3.1 Mais detalhes":
+    erro: "omitir detalhes; detalhes repetidos sem decisão"
+    AL: "confiança baixa anunciada como 'provavelmente'"
+    MAC: { tag: "O que é isto?", assinatura: "2º support(details) no mesmo objeto" }
+  "4.1 Confirmar":
+    erro: "engano: objeto errado; aceitar com baixa confiança sem verificar"
+    PA: "TrustGate da persona (affordance: Confirmar some se c < θ sem r verificações) — mecanismo do perfil, não da interface"
+    AL: "'provavelmente, 55 por cento'"
+    RA: "— (confirmação encerra a tarefa; erro capturado pelo verificador externo)"
+    MAC: { tag: "Para mim está bom", assinatura: "confirm de objeto com c<0,75 ou ≠ alvo sem nenhuma verificação prévia" }
+  "Deslize de gesto (Slip)":
+    MAC: { tag: "Ué, o que houve?", assinatura: "gesto com deslize seguido do gesto oposto" }
+  "Desistência":
+    MAC: { tag: "Desisto", assinatura: "evento give_up (agente ou AttemptLimit)" }

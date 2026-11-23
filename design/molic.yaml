@@ -1,0 +1,77 @@
+# molic.yaml — Diagrama MoLIC (Barbosa & de Paula, 2003) como máquina de estados.
+# Papel de usuário único: "pessoa usuária do app" (Marina ou comparador).
+# Cada CENA tem um tópico; cada fala u: é uma ação permitida ao agente (espaço de ações);
+# cada fala d: é a resposta do preposto do designer (mudança da imagem observável).
+# Este arquivo é a especificação; src/app/fsm.ts é a implementação e é testado contra ele
+# (tests/fsm.test.ts verifica que as falas u: de cada cena coincidem).
+# Ações físicas (mirar, tato, pegar) são falas u: dirigidas ao mundo, registradas como eventos.
+
+opening: { from: abertura, to: inicio, d: "d: Reconhecer objetos. Tela inicial." }
+
+scenes:
+  launcher:
+    topic: "Abrir o aplicativo (tela inicial do celular)"
+    u:
+      proximo:      { to: launcher, d: "foco no próximo app da lista", event: focus_move }
+      anterior:     { to: launcher, d: "foco no app anterior", event: focus_move }
+      ativar:       { to: inicio|launcher, d: "abre o app em foco", event: activate }
+      atalho_app:   { to: inicio, d: "Reconhecer objetos aberto", event: shortcut_used, condition: "ExpertShortcuts sorteou disponível" }
+      desistir:     { to: encerramento, d: "tarefa encerrada pela pessoa", event: give_up }
+  inicio:
+    topic: "Escolher o que fazer no app"
+    u:
+      proximo:      { to: inicio, d: "foco no próximo controle (Reconhecer objeto | Ajuda)", event: focus_move }
+      anterior:     { to: inicio, d: "foco no controle anterior", event: focus_move }
+      ativar:       { to: camera|ajuda, d: "Câmera aberta. Aponte para o objeto e toque em Capturar.", event: activate }
+      atalho_camera: { to: camera, d: "Câmera aberta (atalho)", event: shortcut_used, condition: "ExpertShortcuts" }
+      desistir:     { to: encerramento, d: "tarefa encerrada", event: give_up }
+  camera:
+    topic: "Enquadrar e capturar o objeto"
+    u:
+      mirar_esquerda: { to: camera, d: "Câmera movida para a esquerda", event: aim_move, mode: table }
+      mirar_direita:  { to: camera, d: "Câmera movida para a direita", event: aim_move, mode: table }
+      aproximar:      { to: camera, d: "Câmera mais perto", event: aim_move }
+      afastar:        { to: camera, d: "Câmera mais longe", event: aim_move }
+      tato:           { to: camera, d: "forma e tamanho percebidos ao tato (sem texto)", event: support, support: tato }
+      pegar_proxima:  { to: camera, d: "Você pegou outro objeto", event: aim_move, mode: held }
+      capturar:       { to: resultado, d: "anúncio: N objetos reconhecidos; item i de N com confiança", event: capture }
+      pedir_ajuda:    { to: ajuda, d: "Ajuda. Escolha o tipo de dúvida.", event: support, support: help }
+      voltar:         { to: inicio, d: "Tela inicial", event: activate }
+      desistir:       { to: encerramento, d: "tarefa encerrada", event: give_up }
+  resultado:
+    topic: "Ouvir e escolher o objeto reconhecido"
+    u:
+      proximo:       { to: resultado, d: "item i+1 de N", event: focus_move, condition: "SerialChannel" }
+      anterior:      { to: resultado, d: "item i-1 de N", event: focus_move, condition: "SerialChannel" }
+      repetir:       { to: resultado, d: "anúncio repetido por completo", event: support, support: repeat }
+      mais_detalhes: { to: detalhes, d: "texto do rótulo, cor, forma, posição", event: support, support: details }
+      confirmar:     { to: encerramento, d: "Objeto confirmado: <rótulo>", event: confirm, condition: "TrustGate libera (c ≥ θ ou r verificações ou sorteio q)" }
+      "confirmar:<id>": { to: encerramento, d: "Objeto confirmado", event: confirm, condition: "sem SerialChannel (lista visível)" }
+      nova_captura:  { to: camera, d: "Câmera aberta", event: activate }
+      pedir_ajuda:   { to: ajuda, d: "Ajuda", event: support, support: help }
+      desistir:      { to: encerramento, d: "tarefa encerrada", event: give_up }
+  detalhes:
+    topic: "Verificar o objeto em foco"
+    u:
+      repetir:    { to: detalhes, d: "detalhes repetidos", event: support, support: repeat }
+      confirmar:  { to: encerramento, d: "Objeto confirmado", event: confirm, condition: "TrustGate" }
+      voltar:     { to: resultado, d: "Resultado", event: activate }
+      desistir:   { to: encerramento, d: "tarefa encerrada", event: give_up }
+  ajuda:
+    topic: "Tirar uma dúvida (ajuda sob demanda, estratificada)"
+    u:
+      ajuda_enquadrar: { to: ajuda, d: "instruções de enquadramento", event: support, support: help }
+      ajuda_navegar:   { to: ajuda, d: "como percorrer a lista de resultados", event: support, support: help }
+      ajuda_confianca: { to: ajuda, d: "o que significa a porcentagem", event: support, support: help }
+      ajuda_confirmar: { to: ajuda, d: "como confirmar o objeto", event: support, support: help }
+      voltar:          { to: "<cena anterior>", d: "retorna à cena de origem", event: activate }
+      desistir:        { to: encerramento, d: "tarefa encerrada", event: give_up }
+
+# Falas de recuperação de ruptura (d: do preposto), ligadas à matriz errors.yaml:
+breakdown_utterances:
+  capture_empty:   "d: Nenhum objeto reconhecido. Tente mover a câmera ou afastar."   # CE
+  low_confidence:  "d: <rótulo>, provavelmente, <c>%."                                 # AL
+  gate_blocked:    "(filtro de affordance: Confirmar ausente da lista de falas)"       # TrustGate
+  attempt_limit:   "(controlador: limite de capturas sem sucesso → desistência)"       # AttemptLimit
+
+closing: { from: encerramento, d: "fim da tarefa; estado final entregue ao verificador externo" }

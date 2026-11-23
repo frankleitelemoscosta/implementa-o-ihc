@@ -1,0 +1,22 @@
+# help.yaml — Ajuda sob demanda estratificada por tipo de dúvida (Shneiderman & Plaisant, 2010).
+# Acesso SOMENTE por fala u: registrada (pedir_ajuda → ajuda_*; repetir; mais_detalhes; tato).
+# Cada uso gera evento `support` com o tipo. Textos implementados em src/app/fsm.ts (HELP_TEXTS).
+strata:
+  - tipo: "Como faço? (procedimento — enquadrar)"
+    fala_u: ajuda_enquadrar
+    disponível_em: [camera, resultado, inicio→Ajuda]
+  - tipo: "Onde estou? (navegação no resultado)"
+    fala_u: ajuda_navegar
+  - tipo: "O que isto significa? (interpretação da confiança)"
+    fala_u: ajuda_confianca
+  - tipo: "Como termino? (confirmação)"
+    fala_u: ajuda_confirmar
+  - tipo: "O que foi dito? (memória)"
+    fala_u: repetir
+    support: repeat
+  - tipo: "O que é este objeto? (verificação)"
+    fala_u: [mais_detalhes, tato]
+    support: [details, tactile]
+rules:
+  - "Nenhum texto de ajuda é anexado a o_t sem que a fala correspondente tenha sido executada."
+  - "Uso de ajuda (U) é contado por tipo, a partir do campo support dos eventos."

@@ -1,0 +1,23 @@
+# klm.yaml — Linha de base GOMS/KLM de ESPECIALISTA (Atividade 1.2). ARTEFATO DO ANALISTA.
+# Método ideal, sem erros, sem perturbações, na interface implementada (src/app/fsm.ts).
+# O tempo é calculado por `npm run metrics` reexecutando a sequência no FSM e somando
+# os operadores (src/core/klm.ts): K=0,28 s, M=1,35 s, P=1,10 s, R = palavras/3 por s.
+# `actions` = nº de ações observáveis (Ouvir e Decidir são operadores não observáveis, R/M).
+# Reconciliação com a HTA congelada (main.pdf): C1 lista 6 operadores GOMS incluindo "Ouvir";
+# C2 lista 9 incluindo 2× "Ouvir" e 2× "Tato"; aqui os operadores perceptivos viram R e o
+# tato é dispensado pelo especialista (as caixas são iguais ao tato).
+baselines:
+  C1:
+    method: "Ativar ≫ Mirar direita ×2 ≫ Capturar ≫ [Ouvir: R] ≫ Confirmar"
+    sequence: [ativar, mirar_direita, mirar_direita, capturar, confirmar]
+    actions: 5
+    goms_main_pdf: 6
+  C2:
+    method: "Ativar ≫ Capturar ≫ Mais detalhes ≫ Voltar ≫ Nova captura ≫ Pegar próxima ≫ Capturar ≫ Mais detalhes ≫ Confirmar"
+    sequence: [ativar, capturar, mais_detalhes, voltar, nova_captura, pegar_proxima, capturar, mais_detalhes, confirmar]
+    actions: 9
+    goms_main_pdf: 9
+  # Tarefas de validação: apenas a contagem da HTA congelada (usada para o limite de
+  # interrupção). Sequências não são reexecutadas antes do congelamento.
+  V1: { actions: 10, goms_main_pdf: 10, reserved: true }
+  V2: { actions: 7, goms_main_pdf: 7, reserved: true }

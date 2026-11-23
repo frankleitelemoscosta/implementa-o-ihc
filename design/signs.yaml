@@ -1,0 +1,78 @@
+# signs.yaml — Metamensagem e Tabela de Paridade de Signos (Atividade 1.1).
+# Implementação: src/observation/translator.ts (o_t) e src/app/fsm.ts (falas d:).
+
+metamessage:
+  human: >
+    "Este é o meu entendimento de quem você é: uma pessoa cega, experiente com o leitor de tela,
+    que quer identificar sozinha um objeto da casa e precisa de segurança suficiente para agir.
+    Por isso, desenhei um aplicativo que fala tudo o que mostra, um item por vez, na ordem fixa
+    dos gestos que você já domina; que diz o quanto tem certeza ('provavelmente', porcentagem)
+    para que você decida quando conferir; e que oferece Repetir, Mais detalhes, Ajuda e o seu
+    próprio tato como caminhos de verificação. A decisão de confirmar é sempre sua."
+  agent: >
+    "Você, agente, recebe exatamente o que essa pessoa perceberia a cada momento — o anúncio
+    falado, o item em foco e as ações que ela pode executar agora — e nada além disso: não verá
+    a imagem da câmera, a lista de objetos fora do quadro, o objetivo interno da tarefa nem como
+    o sucesso será julgado. Suas escolhas se limitam às falas que a interface oferece neste estado."
+
+# Classes de signo (de Souza, 2005): estático (forma da interface num instante),
+# dinâmico (comportamento ao longo da interação), metalinguístico (a interface falando de si).
+parity:
+  - signo: Título da tela
+    classe: estático
+    tela_humano: "Cabeçalho 'Reconhecer objetos — Câmera'"
+    o_t: "[Tela] Reconhecer objetos — Câmera"
+    restrito: nenhum
+  - signo: Controle em foco (TalkBack)
+    classe: estático
+    tela_humano: "Retângulo de foco + leitura 'Reconhecer objeto, botão'"
+    o_t: "[Em foco] Reconhecer objeto, botão."
+    restrito: "demais controles não focados (perfil); visíveis em [Na tela] só no comparador"
+  - signo: Rótulo acessível das ações
+    classe: metalinguístico
+    tela_humano: "contentDescription dos botões/gestos"
+    o_t: "lista '- capturar: Botão Capturar' (falas u: válidas no estado)"
+    restrito: "ações de outras cenas; ações bloqueadas pelo TrustGate somem (filtro de affordance)"
+  - signo: Anúncio do reconhecimento
+    classe: dinâmico
+    tela_humano: "fala 'N objetos reconhecidos: caneca azul, 90 por cento; …'"
+    o_t: "[Último anúncio] … (AudioBuffer: só os últimos k itens; '…' marca o esquecido)"
+    restrito: "ids internos (mug_blue), confiança não anunciada, objetos fora do quadro"
+  - signo: Item da lista de resultado
+    classe: dinâmico
+    tela_humano: "'Item 2 de 4: caneca azul, 90 por cento'"
+    o_t: "[Em foco] Item i de n: … (SerialChannel); lista completa só no comparador/genérico"
+    restrito: "itens não focados (perfil)"
+  - signo: Indicador de incerteza
+    classe: dinâmico
+    tela_humano: "'provavelmente' quando c < 0,75 + porcentagem"
+    o_t: "idem, textual"
+    restrito: "limiar θ da persona (parâmetro do TrustGate)"
+  - signo: Posição da câmera
+    classe: dinâmico
+    tela_humano: "propriocepção (onde o braço aponta); vidente: pré-visualização"
+    o_t: "[Sua mira, pelo movimento do braço] celular apontado à direita, distância normal"
+    restrito: "quadro real após AimNoise; pré-visualização só no comparador"
+  - signo: Detalhes do objeto
+    classe: dinâmico
+    tela_humano: "leitura do texto do rótulo, cor, forma, posição"
+    o_t: "[Último anúncio] Detalhes: …"
+    restrito: nenhum (informação que o app de fato fala)
+  - signo: Retorno do tato
+    classe: dinâmico (mundo físico)
+    tela_humano: "forma e tamanho sentidos na mão"
+    o_t: "'Ao tato: caixa retangular pequena.'"
+    restrito: "texto impresso (tato não lê)"
+  - signo: Tela de ajuda estratificada
+    classe: metalinguístico
+    tela_humano: "tópicos: enquadramento, resultado, confiança, confirmar"
+    o_t: "texto do tópico escolhido, só após a fala u: pedir_ajuda → ajuda_*"
+    restrito: "ajuda nunca é enviada sem pedido registrado"
+  - signo: Histórico de passos
+    classe: dinâmico
+    tela_humano: "memória da própria pessoa"
+    o_t: "[Passos anteriores] últimos 4 (janela controlada pelo controlador)"
+    restrito: "passos além da janela; listas longas passam pelo AudioBuffer"
+
+never_in_o_t: [HTA, CTT, GOMS/KLM, critério de sucesso, alvo interno, ids de objetos, parâmetros θ, nomes dos mecanismos, cenas/instruções de V1 e V2]
+audit: "npm run check-leak -- <dir> varre todos os prompts enviados"

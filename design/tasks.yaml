@@ -1,0 +1,28 @@
+# tasks.yaml — ARTEFATO DO ANALISTA (main.pdf, Tab. VI).
+# Somente o campo `instruction` chega ao agente (texto literal do protocolo).
+# `success` é lido EXCLUSIVAMENTE pelo verificador externo (src/verifier).
+tasks:
+  C1:
+    set: calibration
+    scene: kitchen_01
+    instruction: "Encontre sua caneca azul. Avise se quiser parar."
+    success: { confirmed_object: mug_blue }
+    baseline_ref: C1
+  C2:
+    set: calibration
+    scene: meds_01
+    instruction: "Descubra qual caixa é a dipirona. Avise se quiser parar."
+    success: { confirmed_object: box_dipirona }
+    baseline_ref: C2
+  V1:
+    set: validation          # RESERVADA — bloqueada no código
+    scene: sofa_01
+    instruction: "Encontre o controle remoto no sofá. Avise se quiser parar."
+    success: { confirmed_object: remote }
+    baseline_ref: V1
+  V2:
+    set: validation          # RESERVADA — bloqueada no código
+    scene: cans_01
+    instruction: "Separe a lata de milho. Avise se quiser parar."
+    success: { confirmed_object: can_corn }
+    baseline_ref: V2

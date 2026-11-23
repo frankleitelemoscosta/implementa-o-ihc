@@ -1,0 +1,11 @@
+# Cena de calibração C2 — três caixas de mesmo formato, uma por vez na mão.
+id: meds_01
+set: calibration
+mode: held             # a persona segura um objeto por vez; "pegar próxima" troca o objeto
+start_screen: inicio
+start_held: 0
+start_zoom: normal
+objects:
+  - { id: box_paracetamol, label: caixa de medicamento, label_near: caixa de Paracetamol, color: branca e azul,     shape: "caixa retangular pequena", text: "Paracetamol 750 mg, 20 comprimidos",          conf: 0.55, conf_near: 0.84 }
+  - { id: box_dipirona,    label: caixa de medicamento, label_near: caixa de Dipirona,    color: branca e vermelha, shape: "caixa retangular pequena", text: "Dipirona monoidratada 500 mg, 10 comprimidos", conf: 0.55, conf_near: 0.82 }
+  - { id: box_ibuprofeno,  label: caixa de medicamento, label_near: caixa de Ibuprofeno,  color: branca e laranja,  shape: "caixa retangular pequena", text: "Ibuprofeno 400 mg, 10 cápsulas",               conf: 0.55, conf_near: 0.83 }

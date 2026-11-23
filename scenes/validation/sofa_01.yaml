@@ -1,0 +1,13 @@
+# VALIDAÇÃO V1 — RESERVADA desde 26/10/2026. Não usar em calibração, testes ou ajustes.
+id: sofa_01
+set: validation
+mode: table
+start_screen: launcher
+start_aim: 0
+start_zoom: normal
+objects:
+  - { id: cushion,  label: almofada,         pos: -2, color: bege,   shape: "macia e quadrada",          text: "",          conf: 0.85 }
+  - { id: remote,   label: controle remoto,  pos: -1, color: preto,  shape: "retangular fino com botões", text: "",          conf: 0.74 }
+  - { id: blanket,  label: manta,            pos: 0,  color: cinza,  shape: "tecido dobrado",            text: "",          conf: 0.81 }
+  - { id: glasses,  label: óculos escuros,   pos: 1,  color: preto,  shape: "armação com duas hastes",    text: "",          conf: 0.79 }
+  - { id: magazine, label: revista,          pos: 2,  color: colorida, shape: "plana e flexível",        text: "Revista TV", conf: 0.83 }

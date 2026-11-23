@@ -1,0 +1,12 @@
+# Cena de calibração C1 — mesa da cozinha com 4 objetos; caneca azul fora do centro.
+id: kitchen_01
+set: calibration
+mode: table            # objetos fixos em posições -2..+2; a câmera mira uma posição
+start_screen: inicio
+start_aim: 0
+start_zoom: normal
+objects:
+  - { id: cup_white,  label: caneca branca,   pos: -1, color: branca,      shape: "cilíndrico com alça, tamanho médio", text: "",        conf: 0.88 }
+  - { id: thermos,    label: garrafa térmica, pos: 0,  color: prata,       shape: "cilíndrico alto, com tampa de rosca",  text: "",        conf: 0.93 }
+  - { id: sugar_jar,  label: pote de açúcar,  pos: 1,  color: transparente, shape: "pote baixo com tampa",             text: "Açúcar",  conf: 0.80 }
+  - { id: mug_blue,   label: caneca azul,     pos: 2,  color: azul-marinho, shape: "cilíndrico com alça, tamanho médio", text: "",        conf: 0.90 }
