@@ -1,0 +1,8 @@
+UX-Agent — Fase P3 (Partes I e II) — IHC, CEFET-MG Divinópolis
+Autores: Frank Leite Lemos Costa, João Paulo da Cunha Faria e Alvaro Augusto José Silva
+
+E4 + E1  UXAgent-P3-artigo-com-anexo-E1.pdf  (artigo IEEE, 5 p., com o Caderno de Design como apêndice)
+         E4-artigo.pdf e E1-caderno-de-design.pdf  (os mesmos documentos, separados)
+E2       https://github.com/frankleitelemoscosta/implementa-o-ihc
+E3       E3.zip  (logs JSON das execuções, prompts, dicionário de campos, métricas e config.yaml)
+E5       vídeo de demonstração (.mp4), enviado à parte
