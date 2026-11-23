@@ -18,7 +18,7 @@ Disciplina: Interação Humano-Computador -- UX-Agent, Fase P3}}
 \maketitle
 
 \begin{abstract}
-Agentes proxy baseados em LLM costumam encenar perfis por instruções no prompt, recebem informações que o usuário real não teria e declaram o próprio sucesso. Este trabalho descreve a implementação instrumentada do UX-Agent para um aplicativo assistivo de reconhecimento de objetos, operado no lugar de uma persona fictícia cega e usuária de leitor de tela. A interface foi modelada como metacomunicação para dois receptores, com tabela de paridade de signos, tarefas refinadas em CTT, linha de base GOMS/KLM de especialista, diálogo em MoLIC e matriz de prevenção e recuperação de erros. Na implementação, a MoLIC é a máquina de estados que define, a cada passo, o \emph{enum} de falas válidas da saída estruturada do LLM. Nove mecanismos parametrizados com semente atuam fora do prompt sobre a observação, as ações disponíveis e a execução, e um verificador externo decide o sucesso pelo estado final. Um piloto com as tarefas de calibração compara três condições (perfil, comparador neutro e agente genérico) e relata sucesso, erros, ações, uso de ajuda e rupturas de comunicabilidade detectadas apenas por assinaturas no log. Todos os resultados são sintéticos.
+Agentes proxy baseados em LLM costumam encenar perfis por instruções no prompt, recebem informações que o usuário real não teria e declaram o próprio sucesso. Este trabalho descreve a implementação instrumentada do UX-Agent para um aplicativo assistivo de reconhecimento de objetos, operado no lugar de uma persona fictícia cega e usuária de leitor de tela. A interface foi modelada como metacomunicação para dois receptores, com tabela de paridade de signos, tarefas refinadas em CTT, linha de base GOMS/KLM de especialista, diálogo em MoLIC e matriz de prevenção e recuperação de erros. Na implementação, a MoLIC é a máquina de estados que define, a cada passo, o \emph{enum} de falas válidas da saída estruturada do LLM. Nove mecanismos parametrizados com semente atuam fora do prompt sobre a observação, as ações disponíveis e a execução, e um verificador externo decide o sucesso pelo estado final. Um piloto com as tarefas de calibração compara três condições (perfil, comparador neutro e agente genérico) e relata sucesso, erros, ações, uso de ajuda e rupturas de comunicabilidade detectadas apenas por assinaturas no log. Com um LLM local de 7B, o comparador teve sucesso em 80\% das execuções de C1 e as condições com a persona em nenhuma, e a ruptura mais frequente foi a aceitação de um objeto errado. Todos os resultados são sintéticos.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -114,7 +114,7 @@ As rupturas de comunicabilidade~\cite{desouza} são detectadas por regras sobre 
 A auditoria de fronteira (\texttt{npm run check-leak}) varre todos os prompts em busca de 65 termos proibidos: ids, critério, nomes da HTA/CTT/GOMS/KLM, nomes e parâmetros dos mecanismos, conteúdo de V1/V2 e verbos de encenação.
 
 \section{Piloto}
-Foram executadas as tarefas de calibração C1 e C2 nas três condições, com 10 sementes por célula (1000--1009); a mesma semente sorteia os mesmos $\theta$ nas três condições. As métricas seguem o dicionário herdado~\cite{alinhamento}:
+O protocolo prevê as tarefas de calibração C1 e C2 nas três condições, com 10 sementes por célula (1000--1009); a mesma semente sorteia os mesmos $\theta$ nas três condições. As métricas seguem o dicionário herdado~\cite{alinhamento}:
 \begin{itemize}
 \item $S$: sucesso pelo verificador externo.
 \item $AI$: aceitação incorreta.
@@ -139,14 +139,23 @@ A Tabela~\ref{tab:piloto} apresenta os resultados por tarefa e condição, e a T
 \input{tables/pilot_mac.tex}
 \end{table}
 
-% >>> PREENCHER APÓS O PILOTO COM O LLM (números das Tabelas II e III):
-\textbf{[A completar com os resultados do piloto LLM.]} Pontos a discutir: (a) diferença de $S$, $\bar U$ e $R_{enq}$ entre perfil e comparador, na direção prevista ($S$ menor e $U$, $R_{enq}$ maiores no perfil); (b) diferença entre perfil e genérico, que mede quanto do comportamento vem dos mecanismos e não da ficha textual; (c) $\Delta A=\bar A-A_{KLM}$ e a razão de tempo; (d) quais rupturas aparecem e quais operações da HTA elas apontam como pontos de revisão do protocolo; (e) falhas técnicas e propostas rejeitadas.
+\textbf{Execução.} O piloto rodou com Qwen2.5-7B local (Ollama, CPU), limite de $\min(25, 3A_{KLM})$ ações e cerca de 4~min por execução. Por restrição de tempo ele foi interrompido após 36 das 60 execuções previstas: C1 completa nas três condições e C2 apenas na condição perfil (sementes 1000--1005). As células C2/comparador e C2/genérico ficaram sem dados, e as comparações abaixo valem só para C1. Não houve falhas técnicas nem propostas fora do \emph{enum} (decodificação restrita), e a auditoria de vazamento não encontrou nenhum dos 65 termos proibidos nos 481 prompts.
+
+\textbf{(a) Perfil $\times$ comparador.} A diferença vai na direção prevista: $S=0{,}80$ no comparador e $S=0$ no perfil em C1. No comparador o modelo vê o quadro completo e chega ao objeto com mira e zoom ($\bar A=10{,}9$). No perfil ele recebe só o canal serial do leitor de tela e passa a maior parte das ações navegando pela lista com \texttt{proximo} (63 de 109 escolhas), sem relacionar o anúncio ao pedido. $\bar U$ foi igual (1{,}3) e $R_{enq}=0$ em C1, de modo que a diferença de $S$ não veio da ajuda nem do enquadramento, e sim da observação.
+
+\textbf{(b) Perfil $\times$ genérico.} As duas condições tiveram $S=0$ e $AI=1$: a ausência dos mecanismos não fez o LLM acertar, e o padrão de escolhas foi quase o mesmo (63 \texttt{proximo} em ambas). O genérico usou mais ajuda ($\bar U=2{,}6$) e mais ações ($\bar A=13{,}1$). Com $S$ nulo nas duas células, o piloto não separa o efeito dos mecanismos do efeito da ficha; o que ele mostra é que o gargalo do modelo 7B está antes, na leitura da observação serial. Os mecanismos aparecem no log (rupturas \emph{Onde estou?} e \emph{Desisto} só no perfil), mas não mudam o veredito.
+
+\textbf{(c) Ações e tempo.} $\Delta A$ foi de $+5{,}9$ (comparador), $+6{,}9$ (perfil) e $+8{,}1$ (genérico) em C1, e de $+11{,}3$ em C2/perfil. A razão $\bar T_{sim}/T_{KLM}$ ficou entre 2{,}2 e 4{,}3; como muitas execuções foram interrompidas, ela subestima o tempo até o sucesso e serve apenas como hipótese.
+
+\textbf{(d) Rupturas.} \emph{Cadê?} domina em todas as células com perfil ou ficha da Marina e aponta a operação ``localizar o item na lista'' da HTA: o anúncio serial não deixa claro quando o item procurado foi lido. \emph{Para mim está bom} (aceitação incorreta) aparece em C1 com a garrafa térmica e o pote de açúcar, e em todas as 4 confirmações de C2, sempre a caixa de paracetamol no lugar da dipirona, o que aponta a operação ``conferir o rótulo antes de confirmar'' como o principal ponto de revisão do protocolo. \emph{Onde estou?} (7 em C1, 3 em C2) só ocorre com os mecanismos ligados e sinaliza a troca de cena sem anúncio claro.
+
+\textbf{(e) Falhas técnicas.} Nenhuma nas 36 execuções. Um piloto anterior com Llama-3-8B teve 59 falhas \texttt{fetch failed} durante a atualização do servidor e foi descartado; os dados foram separados pelo \emph{hash} do \texttt{config.yaml} registrado em cada evento.
 
 \section{Ameaças à validade}
 \textbf{Vazamentos residuais.} A propriocepção da mira e o histórico de 4 passos são escolhas de paridade discutíveis. A ficha diz que Marina é cega, o que pode induzir o LLM a ``encenar'' além dos mecanismos; a condição genérica mede esse efeito, mas não o elimina.
 \textbf{Limitações do LLM.} O piloto usou um modelo pequeno (7B, quantizado, em CPU), escolhido por restrição de custo. Ele erra mais que os modelos previstos na Modelagem, e parte das falhas observadas pode refletir a capacidade do modelo e não o efeito dos mecanismos. Há também não determinismo (temperatura 0{,}7 e amostragem) e possível contaminação por fontes públicas~\cite{manduchi}. O campo \texttt{raciocinio} (D19) muda o formato de resposta previsto e pode alterar as escolhas do modelo.
 \textbf{Validade de construto.} Os valores de $k$, $\theta$, $r$, $q$, $p_{slip}$ e $\sigma$ são hipóteses; o tempo simulado não é tempo humano; eventos de foco não são rastreamento ocular~\cite{nielsen}. A interface é um simulador discreto, sem iluminação, ângulo ou fadiga.
-\textbf{Amostra.} São 10 execuções por célula, abaixo das 30 previstas na Modelagem, o que dá intervalos amplos. As execuções repetidas não ampliam a amostra humana.
+\textbf{Amostra.} São 10 execuções por célula (6 em C2/perfil, nenhuma em C2/comparador e C2/genérico), abaixo das 30 previstas na Modelagem, o que dá intervalos amplos. As execuções repetidas não ampliam a amostra humana.
 \textbf{Validação.} V1 e V2 não foram executadas. O piloto serve para depurar o protocolo, a instrumentação e as métricas, e o agente permanece um \emph{protótipo exploratório não validado}~\cite{modelagem}.
 
 \section{Conclusão}
